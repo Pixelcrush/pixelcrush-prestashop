@@ -64,11 +64,14 @@ if [ "${ps_version}" = "1.5" ]
     cp -a 1.5/* "${tmp_dir}/pixelcrush"
     sed -e "s/\$this->ps_versions_compliancy.*/\$this->ps_versions_compliancy = array\(\'min\' => \'1.5\', \'max\' => \'1.5.9.9\'\);/g" \
         "${tmp_dir}/pixelcrush/pixelcrush.php" > "${tmp_dir}/pixelcrush/pixelcrush.php.new"
+
     mv "${tmp_dir}/pixelcrush/pixelcrush.php.new" "${tmp_dir}/pixelcrush/pixelcrush.php"
+    out_fname="${out_dir}/pixelcrush-1.5.zip"
 
 elif [ "${ps_version}" = "1.6" -o "${ps_version}" = "1.7" ]
   then
     cp -a 1.6-1.7/* "${tmp_dir}/pixelcrush"
+    out_fname="${out_dir}/pixelcrush-1.6-1.7.zip"
 else
   echo "Unsupport PrestaShop version: ${ps_version}"
   exit 1
@@ -76,7 +79,6 @@ fi
 
 # Compress results
 cd "${tmp_dir}"
-out_fname="${out_dir}/prestashop-${ps_version}.zip"
 zip -r --exclude=*.DS_Store* "$out_fname" pixelcrush > /dev/null
 cd "${prev_dir}"
 
