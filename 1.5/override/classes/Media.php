@@ -50,8 +50,11 @@ class Media extends MediaCore
         }
         
         // Pixelcrush: We will define a timestamp based on modification date of the file to be cached on pixelcrush
-        if (Module::IsEnabled('pixelcrush')) {
-            $js_uri = Module::getInstanceByName('pixelcrush')->cdnProxy($file_uri, $js_uri);
+        if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+            if ($pixelcrush->isConfigured() && $pixelcrush::$config->enable_statics) {
+                $js_uri = $pixelcrush->cdnProxy($file_uri, $js_uri);
+            }
         }
         
         return $js_uri;
@@ -79,8 +82,11 @@ class Media extends MediaCore
         }
         
         // Pixelcrush: We will define a timestamp based on modification date of the file to be cached on pixelcrush
-        if (Module::IsEnabled('pixelcrush')) {
-            $css_uri = Module::getInstanceByName('pixelcrush')->cdnProxy($file_uri, $css_uri);
+        if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+            if ($pixelcrush->isConfigured() && $pixelcrush::$config->enable_statics) {
+                $css_uri = $pixelcrush->cdnProxy($file_uri, $css_uri);
+            }
         }
         
         // Fixes url malformating on css's @import(file)b
