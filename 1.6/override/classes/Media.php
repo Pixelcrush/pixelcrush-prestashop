@@ -54,7 +54,10 @@ class Media extends MediaCore
         }
         
         if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
-            $media_uri = Module::getInstanceByName('pixelcrush')->cdnProxy($file_uri, $media_uri);
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
+                $media_uri = $pixelcrush->cdnProxy($file_uri, $media_uri);
+            }
         }
     
         if ($css_media_type) {

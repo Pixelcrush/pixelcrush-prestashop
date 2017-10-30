@@ -29,7 +29,7 @@ class Link extends LinkCore
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
             $pixelcrush = Module::getInstanceByName('pixelcrush');
             
-            if ($pixelcrush->isConfigured() && Configuration::get('PIXELCRUSH_ENABLE_IMAGES')) {
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
                 return $pixelcrush->pixelcrushProxy(parent::getImageLink($name, $ids), 'products', $type);
             }
         }
@@ -42,7 +42,7 @@ class Link extends LinkCore
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
             $pixelcrush = Module::getInstanceByName('pixelcrush');
             
-            if ($pixelcrush->isConfigured() && Configuration::get('PIXELCRUSH_ENABLE_IMAGES')) {
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
                 return $pixelcrush->pixelcrushProxy(parent::getSupplierImageLink($id_supplier, $type), 'suppliers', null);
             }
         }
@@ -55,7 +55,7 @@ class Link extends LinkCore
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
             $pixelcrush = Module::getInstanceByName('pixelcrush');
             
-            if ($pixelcrush->isConfigured() && Configuration::get('PIXELCRUSH_ENABLE_IMAGES')) {
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
                 return $pixelcrush->pixelcrushProxy(parent::getCatImageLink($name, $id_category), 'categories', $type);
             }
         }
@@ -68,7 +68,7 @@ class Link extends LinkCore
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
             $pixelcrush = Module::getInstanceByName('pixelcrush');
             
-            if ($pixelcrush->isConfigured() && Configuration::get('PIXELCRUSH_ENABLE_IMAGES')) {
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
                 return $pixelcrush->pixelcrushProxy(parent::getManufacturerImageLink($id_manufacturer, $type), 'manufacturers', $type);
             }
         }

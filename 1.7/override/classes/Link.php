@@ -37,6 +37,19 @@ class Link extends LinkCore
         return parent::getImageLink($name, $ids, $type);
     }
     
+    public function getSupplierImageLink($id_supplier, $type = null)
+    {
+        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+            
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
+                return $pixelcrush->pixelcrushProxy(parent::getSupplierImageLink($id_supplier, $type), 'suppliers', null);
+            }
+        }
+        
+        return parent::getSupplierImageLink($id_supplier, $type);
+    }
+    
     public function getCatImageLink($name, $id_category, $type = null)
     {
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
@@ -48,5 +61,18 @@ class Link extends LinkCore
         }
         
         return parent::getCatImageLink($name, $id_category, $type);
+    }
+    
+    public function getManufacturerImageLink($id_manufacturer, $type = null)
+    {
+        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+            
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
+                return $pixelcrush->pixelcrushProxy(parent::getManufacturerImageLink($id_manufacturer, $type), 'manufacturers', $type);
+            }
+        }
+            
+        return parent::getManufacturerImageLink($id_manufacturer, $type);
     }
 }
