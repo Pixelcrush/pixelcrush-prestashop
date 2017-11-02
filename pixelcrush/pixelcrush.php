@@ -46,11 +46,11 @@ class Pixelcrush extends Module
     {
         $this->name         = 'pixelcrush';
         $this->tab          = 'administration';
-        $this->version      = '1.0.0';
+        $this->version      = '1.1.0';
         $this->author       = 'pixelcrush.io';
         $this->bootstrap    = true;
         
-        $this->ps_versions_compliancy = array('min' => '1.6', 'max' => '1.7.9.9');
+        $this->ps_versions_compliancy = array('min' => '1.7', 'max' => '1.7.9.9');
         $this->need_instance = 1;
         $this->module_key = 'f06ff8e65629b4d85e63752cfbf1d457';
         
@@ -133,11 +133,13 @@ class Pixelcrush extends Module
         }
         
         if (Tools::isSubmit('submit'.$this->name)) {
-            if (Tools::getValue('PIXELCRUSH_ENABLE_IMAGES') && Tools::getValue('PIXELCRUSH_ENABLE_STATICS') &&
-                Tools::getValue('PIXELCRUSH_USER_ACCOUNT') && Tools::getValue('PIXELCRUSH_API_SECRET') &&
+            if (Tools::getValue('PIXELCRUSH_USER_ACCOUNT') && Tools::getValue('PIXELCRUSH_API_SECRET') &&
                 Tools::getValue('PIXELCRUSH_FILTERS_PREFIX')
             ) {
-                // TODO: Add Error management
+                // We need to re-initalize stored config and errors in case the user has changed its user-apiKey to reAuth
+                self::$client = null;
+                self::$config = null;
+                $this->_errors = [];
                 
                 Configuration::updateValue('PIXELCRUSH_ENABLE_IMAGES', Tools::getValue('PIXELCRUSH_ENABLE_IMAGES'));
                 Configuration::updateValue('PIXELCRUSH_ENABLE_STATICS', Tools::getValue('PIXELCRUSH_ENABLE_STATICS'));
@@ -148,9 +150,12 @@ class Pixelcrush extends Module
                 Configuration::updateValue('PIXELCRUSH_URL_PROTOCOL', Tools::getValue('PIXELCRUSH_URL_PROTOCOL'));
                 
                 // Reset Existing Filters
-                $this->resetCdnFilters((bool)Tools::getValue('reset_filters_checked'));
-                
-                $output .= $this->displayConfirmation($this->l('Settings updated'));
+                if ($this->resetCdnFilters((bool)Tools::getValue('reset_filters_checked'))) {
+                    $output .= $this->displayConfirmation($this->l('Settings updated'));
+                }
+                else {
+                    $output .= $this->displayError($this->_errors);
+                }
             } else {
                 $output .= $this->displayError('You need to fill all mandatory fields.');
             }
@@ -347,22 +352,6 @@ class Pixelcrush extends Module
         return $helper->generateForm($fields_form);
     }
     
-    public function setConfig()
-    {
-        self::$config = (object)array(
-            'enable_images' => Configuration::get('PIXELCRUSH_ENABLE_IMAGES', false),
-            'enable_statics' => Configuration::get('PIXELCRUSH_ENABLE_STATICS', false),
-            'id' => Configuration::get('PIXELCRUSH_USER_ACCOUNT'),
-            'api_secret_key' => Configuration::get('PIXELCRUSH_API_SECRET'),
-            'rz_bg' => Configuration::get('PIXELCRUSH_FILL_BACKGROUND'),
-            'filters_prefix' => Configuration::get('PIXELCRUSH_FILTERS_PREFIX'),
-            'api_cloud_ttl' => Configuration::get('PIXELCRUSH_API_CLOUD_TTL'),
-            'url_protocol' => Configuration::get('PIXELCRUSH_URL_PROTOCOL'),
-        );
-        
-        return true;
-    }
-    
     public function loadImagesTypeHashes()
     {
         if (!isset(self::$images_types_hash) || empty(self::$images_types_hash)
@@ -432,35 +421,32 @@ class Pixelcrush extends Module
     
     public function pixelcrushProxy($url, $entity, $type)
     {
-        if (!is_object(self::$config)) {
-            $this->setConfig();
-        }
-        
-        if ($this->isConfigured() && !is_object(self::$client)) {
-            self::$client = new \pixelcrush\ApiClient(self::$config->id, self::$config->api_secret_key);
-        }
-        
-        if (!is_object(self::$user_cloud) && $this->apiIsCallable()) {
-            self::$user_cloud = self::$client->userCloud();
-            Configuration::updateValue('PIXELCRUSH_USER_CLOUD', serialize(self::$user_cloud));
-        } elseif (!is_object(self::$user_cloud) || empty(self::$user_cloud)) {
-            self::$user_cloud = unserialize(Configuration::get('PIXELCRUSH_USER_CLOUD'));
-        }
-        
-        if (!is_array(self::$cloud_filters_hash) && is_object(self::$user_cloud)) {
-            $this->loadCloudFiltersHash(self::$user_cloud->cdn->filters);
-        }
-         
-        // Ensure we have backup local image types just in case all/any cloud filter fails (saved statically)
-        $this->loadImagesTypeHashes();
-        
         $params         = array();
         $filter         = null;
         
-        // Using cloud filters if available
-        if (isset(self::$cloud_filters_hash[$this->psFilterMap($entity, $type)])) {
-            $filter = self::$cloud_filters_hash[$this->psFilterMap($entity, $type)];
+        if ($this->apiIsCallable()) {
+            if (!is_object(self::$user_cloud)) {
+                try {
+                    self::$user_cloud = self::$client->userCloud();
+                    Configuration::updateValue('PIXELCRUSH_USER_CLOUD', serialize(self::$user_cloud));
+                } catch (Exception $e) {
+                }
+            } elseif (empty(self::$user_cloud)) {
+                self::$user_cloud = unserialize(Configuration::get('PIXELCRUSH_USER_CLOUD'));
+            }
+            
+            if (!is_array(self::$cloud_filters_hash) && is_object(self::$user_cloud)) {
+                $this->loadCloudFiltersHash(self::$user_cloud->cdn->filters);
+            }
+            
+            // Using cloud filters if available
+            if (isset(self::$cloud_filters_hash[$this->psFilterMap($entity, $type)])) {
+                $filter = self::$cloud_filters_hash[$this->psFilterMap($entity, $type)];
+            }
         }
+        
+        // Ensure we have backup local image types just in case all/any cloud filter fails (saved statically)
+        $this->loadImagesTypeHashes();
         
         // Using hashed local image types if cloud is not available or has invalid value
         if (empty($filter)) {
@@ -474,21 +460,23 @@ class Pixelcrush extends Module
         return self::$client->imgProxiedUrl($url, $params, $filter, self::$domains, self::$config->url_protocol);
     }
     
-    public function cdnProxy($local_uri, $remote_uri)
+    public function cdnProxy($local_uri, $remote_uri, $newAssetManager = false)
     {
         $cdn_uri = null;
-        
-        if ($this->isConfigured() && self::$config->enable_statics) {
-            if (!is_object(self::$client)) {
-                self::$client = new \pixelcrush\ApiClient(self::$config->id, self::$config->api_secret_key);
-            }
-                
-            if (@filemtime($local_uri) && @filesize($local_uri) && is_object(self::$client)) {
+        if ($this->apiIsCallable(false)) {
+            if (@filemtime($local_uri) && @filesize($local_uri)) {
                 $pixelcrush_proxy = self::$client->domain().'/cdn/';
                 $pixelcrush_ts = '?ttl='.filemtime($local_uri);
                 
-                $cdn_uri = $pixelcrush_proxy . Tools::getHttpHost((bool)Configuration::get('PIXELCRUSH_URL_PROTOCOL'))
+                if ($newAssetManager) {
+                    // 1.7: AbstractAssetManager
+                    $url = preg_replace("(^https?://)", "", ltrim(__PS_BASE_URI__.$remote_uri, "/") );
+                    $cdn_uri = $pixelcrush_proxy . Configuration::get('PIXELCRUSH_URL_PROTOCOL').$url . $pixelcrush_ts;
+                } else {
+                    // Legacy 1.7 / 1.6 / 1.5 Media
+                    $cdn_uri = $pixelcrush_proxy . Tools::getHttpHost((bool)Configuration::get('PIXELCRUSH_URL_PROTOCOL'))
                             . __PS_BASE_URI__ . ltrim($remote_uri, "/") . $pixelcrush_ts;
+                }
             }
         }
         
@@ -499,9 +487,20 @@ class Pixelcrush extends Module
     {
         if (!empty(self::$config->id) && !empty(self::$config->api_secret_key)) {
             return true;
-        } elseif ($this->setConfig()) {
-            return !empty(self::$config->id) && !empty(self::$config->api_secret_key);
+        } else {
+            self::$config = (object)array(
+                'enable_images' => Configuration::get('PIXELCRUSH_ENABLE_IMAGES', false),
+                'enable_statics' => Configuration::get('PIXELCRUSH_ENABLE_STATICS', false),
+                'id' => Configuration::get('PIXELCRUSH_USER_ACCOUNT'),
+                'api_secret_key' => Configuration::get('PIXELCRUSH_API_SECRET'),
+                'rz_bg' => Configuration::get('PIXELCRUSH_FILL_BACKGROUND'),
+                'filters_prefix' => Configuration::get('PIXELCRUSH_FILTERS_PREFIX'),
+                'api_cloud_ttl' => Configuration::get('PIXELCRUSH_API_CLOUD_TTL'),
+                'url_protocol' => Configuration::get('PIXELCRUSH_URL_PROTOCOL'),
+            );
         }
+        
+        return !empty(self::$config->id) && !empty(self::$config->api_secret_key);
     }
     
     public function hookActionObjectAddAfter(array $params)
@@ -532,39 +531,77 @@ class Pixelcrush extends Module
     }
     
     public function resetCdnFilters($reset_existing = true)
+    {    
+        if ($this->apiIsCallable()) {
+            if ($reset_existing) {
+                try {
+                    self::$user_cloud = self::$client->userCloud();
+                } catch (Exception $e) {
+                    return $e->getMessage();
+                }
+                
+                foreach (self::$user_cloud->cdn->filters as $filter) {
+                    if (!empty($filter->name)) {
+                        try {
+                            self::$client->userCdnFilterDelete($filter->name);
+                        } catch (Exception $e) {
+                            return $e->getMessage();
+                        }
+                    }
+                }
+            }
+            
+            if (is_object(self::$client)) {
+                foreach ($this->imageTypesAsFilters() as $filter) {
+                    try {
+                        self::$client->userCdnFilterUpsert($filter);
+                    } catch (Exception $e) {
+                        return $e->getMessage();
+                    }
+                }
+            }
+            
+            Configuration::updateValue('PIXELCRUSH_USER_CLOUD', '');
+            Configuration::updateValue('PIXELCRUSH_API_CLOUD_TTL', '');
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
+    public function apiIsCallable($auth = true)
     {
-        if (!is_object(self::$config) || !get_object_vars(self::$config)) {
-            $this->setConfig();
+        if ($this->isConfigured()) {
+            try {
+                $this->setClient($auth);
+            } catch (Exception $e) {
+                $new_ttl = date('Y-m-d H:i:s', strtotime('+5 seconds'));
+                \Configuration::updateValue('PIXELCRUSH_API_CLOUD_TTL', $new_ttl);
+                self::$config->api_cloud_ttl = $new_ttl;
+                $this->_errors[] = $e->getMessage();
+                return false;
+            }
+        } else {
+            return false;
         }
         
-        if ($this->isConfigured() && !is_object(self::$client)) {
+        if (!$auth) {
+            return true;
+        } else {
+            return self::$client->auth_valid;
+        }
+    }
+    
+    public function setClient($auth = true)
+    {
+        if (!is_object(self::$client)) {
             self::$client = new \pixelcrush\ApiClient(self::$config->id, self::$config->api_secret_key);
         }
         
-        if ($reset_existing) {
-            if (!is_object(self::$user_cloud)) {
-                self::$user_cloud = self::$client->userCloud();
-            }
-            
-            foreach (self::$user_cloud->cdn->filters as $filter) {
-                if (!empty($filter->name)) {
-                    self::$client->userCdnFilterDelete($filter->name);
-                }
-            }
+        if (!$auth) {
+            return true;
+        } else {
+            return self::$client->userAuth();
         }
-        
-        if (is_object(self::$client)) {
-            foreach ($this->imageTypesAsFilters() as $filter) {
-                self::$client->userCdnFilterUpsert($filter);
-            }
-        }
-        
-        Configuration::updateValue('PIXELCRUSH_USER_CLOUD', '');
-        Configuration::updateValue('PIXELCRUSH_API_CLOUD_TTL', '');
-    }
-    
-    public function apiIsCallable()
-    {
-        return (!isset(self::$config->api_cloud_ttl) || (self::$config->api_cloud_ttl < date('Y-m-d H:i:s')));
     }
 }

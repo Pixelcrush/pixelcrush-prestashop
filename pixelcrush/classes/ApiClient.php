@@ -29,18 +29,34 @@ class ApiClient
     private $id;
     private $api_secret_key;
     
+    public $auth_valid = false;
+    
     public function __construct($id, $api_secret_key)
     {
         if (empty($id)) {
-            throw new \Exception("id can not be empty");
+            throw new \InvalidArgumentException("id can not be empty");
         }
         
         if (empty($api_secret_key)) {
-            throw new \Exception("secret key can not be empty");
+            throw new \InvalidArgumentException("secret key can not be empty");
         }
                 
         $this->id               = $id;
         $this->api_secret_key   = $api_secret_key;
+    }
+    
+    public function userAuth()
+    {
+        $url        = $this->domain() . '/user/auth';
+        
+        try {
+            $response = $this->rest($url, 'GET', json_encode($this), $this->auth('GET', $url, null, time()));
+            $this->auth_valid = ((isset($response->status) && $response->status == 200) ? true : false);
+        } catch (Exception $e) {
+            $this->auth_valid = false;
+        }
+        
+        return $this->auth_valid;
     }
     
     public function userCloud()
@@ -65,18 +81,6 @@ class ApiClient
     {
         $url        = $this->domain() . "/user/cdn/filter/$filter_name";
         $response   = $this->rest($url, 'DELETE', null, $this->auth('DELETE', $url, null, time()));
-        
-        return $response->result;
-    }
-    
-    public function userInitStore($unit, $image, $id = null)
-    {
-        if (!is_string($image)) {
-            $image = json_encode($image);
-        }
-            
-        $url        = $this->domain() . "/st/$unit/$id";
-        $response   = $this->rest($url, 'POST', $image, $this->auth('POST', $url, $image, time()));
         
         return $response->result;
     }
@@ -127,11 +131,13 @@ class ApiClient
         $response   = $this->restCall($endpoint, $method, $data, $get, $headers);
         $code       = $response->code;
         
-        if (empty($code) || !in_array($code, array(200, 201))) {
-            error_log("Pixelcrush ApiClient Exception [$code]: ".$response->content->error);
+        if (!empty($code) && in_array($code, array(200, 201))) {
+            return $response->content;
+        } elseif (!empty($code) && $code == 401) {
+            throw new \Exception("Authentication Error", 401);
+        } else {
+            throw new \Exception("ApiClient Exception: ".$response->content->error, ($code ?: 500));
         }
-        
-        return $response->content;
     }
     
     public function restCall($endpoint, $method = 'GET', $data = null, $get = null, $headers = null)
