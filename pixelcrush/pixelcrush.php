@@ -133,7 +133,7 @@ class Pixelcrush extends Module
         }
         
         if (Tools::isSubmit('submit'.$this->name)) {
-            if (Tools::getValue('PIXELCRUSH_ENABLE_IMAGES') && Tools::getValue('PIXELCRUSH_ENABLE_STATICS') &&
+            if (Tools::getIsset('PIXELCRUSH_ENABLE_IMAGES') && Tools::getIsset('PIXELCRUSH_ENABLE_STATICS') &&
                 Tools::getValue('PIXELCRUSH_USER_ACCOUNT') && Tools::getValue('PIXELCRUSH_API_SECRET') &&
                 Tools::getValue('PIXELCRUSH_FILTERS_PREFIX')
             ) {
