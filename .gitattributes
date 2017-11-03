@@ -1,0 +1,30 @@
+# Auto detect text files and perform LF normalization
+*        text=auto
+
+# Explicitly declare text files you want to always be normalized and converted
+# to native line endings on checkout.
+*.cs     text diff=csharp filter=spabs
+*.java   text diff=java filter=spabs
+*.html   text diff=html
+*.css    text filter=spabs
+*.js     text filter=spabs
+*.sql    text filter=spabs
+*.php    text filter=spabs
+*.py     text filter=spabs
+
+# Denote all files that are truly binary and should not be modified.
+*.png binary
+*.jpg binary
+
+#*.csproj text merge=union
+#*.sln    text merge=union eol=crlf
+
+#*.docx   diff=astextplain
+#*.DOCX   diff=astextplain
+
+# absolute paths are ok, as are globs
+#/**/postinst* text eol-lf
+
+# paths that don't start with / are treated relative to the .gitattributes folder
+#relative/path/*.txt text eol-lf
+
