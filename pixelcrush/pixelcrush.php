@@ -425,7 +425,7 @@ class Pixelcrush extends Module
         $params         = array();
         $filter         = null;
         
-        if ($this->apiIsCallable()) {
+        if ($this->apiIsCallable(false)) {
             if (!is_object($this->user_cloud)) {
                 try {
                     $this->user_cloud = $this->client->userCloud();
