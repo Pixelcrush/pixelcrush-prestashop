@@ -26,7 +26,7 @@ class Media extends MediaCore
 {
     public static function getMediaPath($media_uri, $css_media_type = null)
     {
-        if (is_array($media_uri) || $media_uri === null || empty($media_uri)) {
+        if (is_array($media_uri) || empty($media_uri)) {
             return false;
         }
         
@@ -36,10 +36,11 @@ class Media extends MediaCore
         }
         
         if (!array_key_exists('host', $url_data)) {
-            $media_uri_host_mode = '/'.ltrim(str_replace(str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, _PS_CORE_DIR_), __PS_BASE_URI__, $media_uri), '/\\');
-            $media_uri = '/'.ltrim(str_replace(str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, _PS_ROOT_DIR_), __PS_BASE_URI__, $media_uri), '/\\');
-            $file_uri = _PS_ROOT_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, $media_uri);
-            $file_uri_host_mode = _PS_CORE_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, Tools::str_replace_once(_PS_CORE_DIR_, '', $media_uri));
+            $media_uri_host_mode  = '/' . ltrim(str_replace(str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, _PS_CORE_DIR_), __PS_BASE_URI__, $media_uri), '/\\');
+            $media_uri            = '/' . ltrim(str_replace(str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, _PS_ROOT_DIR_), __PS_BASE_URI__, $media_uri), '/\\');
+            $file_uri             = _PS_ROOT_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, $media_uri);
+            $file_uri_host_mode   = _PS_CORE_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, Tools::str_replace_once(_PS_CORE_DIR_, '', $media_uri));
+
             if (!@filemtime($file_uri) || @filesize($file_uri) === 0) {
                 if (!defined('_PS_HOST_MODE_')) {
                     return false;

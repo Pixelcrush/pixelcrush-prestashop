@@ -1,0 +1,33 @@
+#pixelcrush-logo-hd {
+    margin-bottom: 4px;
+}
+
+.col-sm-30 {
+    min-width: 256px;
+}
+
+@media only screen and (min-width: 768px) {
+    .col-sm-30 {
+        width:30%!important;
+    }
+}
+
+.disabled {
+    pointer-events: none;
+    tab-index: -1;
+}
+
+.margin-form {
+    margin-bottom: 8px;
+}
+
+label[for=active_on], label[for=active_off] {
+    width: 24px;
+}
+
+#active_on, #active_off {
+    float: left;
+    margin-top: 4px;
+    margin-bottom: 12px;
+}
+

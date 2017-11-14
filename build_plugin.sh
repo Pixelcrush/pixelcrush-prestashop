@@ -25,6 +25,7 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 
 ps_version=""
 tmp_dir=$(mktemp -d)
+script_dir="$( cd "$(dirname "$0")" ; pwd -P )"
 prev_dir=$(pwd)
 out_dir=${prev_dir}
 
@@ -55,6 +56,8 @@ fi
 
 command -v zip >/dev/null 2>&1 || { echo >&2 "You need the zip binary in the path"; exit 1; }
 
+cd "${script_dir}"
+
 # Shared files
 cp -a pixelcrush "${tmp_dir}"
 
@@ -76,18 +79,20 @@ elif [ "${ps_version}" = "1.6" ]
     
     mv "${tmp_dir}/pixelcrush/pixelcrush.php.new" "${tmp_dir}/pixelcrush/pixelcrush.php"
     out_fname="${out_dir}/pixelcrush-1.6.zip"
+
 elif [ "${ps_version}" = "1.7" ]
   then
     cp -a 1.7/* "${tmp_dir}/pixelcrush"
     out_fname="${out_dir}/pixelcrush-1.7.zip"
+
 else
-  echo "Unsupport PrestaShop version: ${ps_version}"
+  echo "Unsupported PrestaShop version: ${ps_version}"
   exit 1
 fi
 
 # Compress results
 cd "${tmp_dir}"
-zip -r --exclude=*.DS_Store* "$out_fname" pixelcrush > /dev/null
+zip -u -r --exclude=*.DS_Store* "$out_fname" pixelcrush > /dev/null
 cd "${prev_dir}"
 
 # Remove temp directory

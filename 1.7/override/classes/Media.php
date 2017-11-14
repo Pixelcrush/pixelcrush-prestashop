@@ -24,6 +24,8 @@
  
 class Media extends MediaCore
 {
+    private static $first_bo_css_loaded = 0;
+
     public static function getMediaPath($media_uri, $css_media_type = null)
     {
         if (is_array($media_uri) || $media_uri === null || empty($media_uri)) {
@@ -40,6 +42,7 @@ class Media extends MediaCore
             $media_uri = '/'.ltrim(str_replace(str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, _PS_ROOT_DIR_), __PS_BASE_URI__, $media_uri), '/\\');
             $file_uri = _PS_ROOT_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, $media_uri);
             $file_uri_host_mode = _PS_CORE_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, Tools::str_replace_once(_PS_CORE_DIR_, '', $media_uri));
+
             if (!@filemtime($file_uri) || @filesize($file_uri) === 0) {
                 if (!defined('_PS_HOST_MODE_')) {
                     return false;
@@ -52,11 +55,20 @@ class Media extends MediaCore
                 
             $media_uri = str_replace('//', '/', $media_uri);
         }
-        
-        if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
-                $media_uri = $pixelcrush->cdnProxy($file_uri, $media_uri);
+
+        if (Module::IsEnabled('pixelcrush') && isset($file_uri)
+        ) {
+            // We need to bypass module.js document.styleSheets[0].cssRules.lenght checking
+            if ($_SERVER['PATH_INFO'] === '/module/catalog' &&
+                Context::getContext()->controller->controller_name === 'AdminModules' &&
+                self::$first_bo_css_loaded === 0 && pathinfo($media_uri, PATHINFO_EXTENSION) === 'css'
+            ) {
+                self::$first_bo_css_loaded = 1;
+            } else {
+                $pixelcrush = Module::getInstanceByName('pixelcrush');
+                if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
+                    $media_uri = $pixelcrush->cdnProxy($file_uri, $media_uri);
+                }
             }
         }
         

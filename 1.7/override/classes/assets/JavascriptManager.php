@@ -31,11 +31,11 @@ class JavascriptManager extends JavascriptManagerCore
         $attribute = $this->getSanitizedAttribute($attribute);
         
         if ('remote' === $server) {
-            $uri = $fullPath;
+            $uri  = $fullPath;
             $type = 'external';
         } else {
-            $uri = $this->getFQDN().parent::getUriFromPath($fullPath);
-            $type = ($inline) ? 'inline' : 'external';
+            $uri  = $this->getFQDN().parent::getUriFromPath($fullPath);
+            $type = $inline ? 'inline' : 'external';
         }
         
         // Build Pixelcrush Proxied URL
@@ -47,25 +47,25 @@ class JavascriptManager extends JavascriptManagerCore
         }
         
         $this->list[$position][$type][$id] = array(
-            'id' => $id,
-            'type' => $type,
-            'path' => $fullPath,
-            'uri' => $uri,
-            'priority' => $priority,
+            'id'        => $id,
+            'type'      => $type,
+            'path'      => $fullPath,
+            'uri'       => $uri,
+            'priority'  => $priority,
             'attribute' => $attribute,
-            'server' => $server,
+            'server'    => $server,
         );
     }
     
     protected function getSanitizedPosition($position)
     {
-        // Overrided visibility
+        // Overridden visibility
         return in_array($position, $this->valid_position, true) ? $position : self::DEFAULT_JS_POSITION;
     }
 
     protected function getSanitizedAttribute($attribute)
     {
-        // Overrided visibility
+        // Overridden visibility
         return in_array($attribute, $this->valid_attribute, true) ? $attribute : '';
     }
 }

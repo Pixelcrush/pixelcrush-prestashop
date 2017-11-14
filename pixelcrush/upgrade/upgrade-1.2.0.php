@@ -25,8 +25,8 @@
 if (!defined('_PS_VERSION_')) {
     exit;
 }
-    
-function upgrade_module_1_1_0($module)
+
+function upgrade_module_1_2_0($module)
 {
     $module->uninstallOverrides();
 
@@ -34,8 +34,22 @@ function upgrade_module_1_1_0($module)
     if (version_compare(_PS_VERSION_, '1.7.0', '>=')) {
         $module->checkOverrideDirectory('assets');
     }
-    
+
     $module->installOverrides();
-    
+
+    // unregister generic object hook types
+    $module->unregisterHook('actionObjectAddAfter');
+    $module->unregisterHook('actionObjectUpdateAfter');
+    $module->unregisterHook('actionObjectDeleteAfter');
+    $module->unregisterHook('hookActionObjectAddAfter');
+    $module->unregisterHook('hookActionObjectUpdateAfter');
+    $module->unregisterHook('hookActionObjectDeleteAfter');
+
+    // Using now object-specific hook type
+    $module->registerHook('actionObjectImageTypeAddAfter');
+    $module->registerHook('actionObjectImageTypeUpdateAfter');
+    $module->registerHook('actionObjectImageTypeDeleteAfter');
+    $module->registerHook('displayBackOfficeHeader');
+
     return true;
 }
