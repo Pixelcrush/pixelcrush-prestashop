@@ -22,20 +22,14 @@
  *
  */
 
-if (!defined('_PS_VERSION_')) {
-    exit;
-}
-    
-function upgrade_module_1_1_0($module)
-{
-    $module->uninstallOverrides();
+header("Pragma: no-cache");
 
-    // Assets directory is not available in PS 1.7 for example
-    if (version_compare(_PS_VERSION_, '1.7.0', '>=')) {
-        $module->checkOverrideDirectory('assets');
-    }
-    
-    $module->installOverrides();
-    
-    return true;
-}
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Cache-Control: no-store, no-cache, must-revalidate");
+
+header("Last-Modified: ".gmdate("D, d M Y H:i:s")." GMT");
+header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
+
+header("Location: ../");
+
+exit;

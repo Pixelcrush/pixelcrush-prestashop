@@ -21,51 +21,67 @@
  * @license http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2
  *
  */
- 
+
 namespace pixelcrush;
 
 class ApiClient
 {
     private $id;
     private $api_secret_key;
-    
+
     public $auth_valid = false;
-    
+
     public function __construct($id, $api_secret_key)
     {
         if (empty($id)) {
-            throw new \InvalidArgumentException("id can not be empty");
+            throw new \InvalidArgumentException('ApiClient: id can not be empty');
         }
-        
+
         if (empty($api_secret_key)) {
-            throw new \InvalidArgumentException("secret key can not be empty");
+            throw new \InvalidArgumentException('ApiClient: secret key can not be empty');
         }
-                
-        $this->id               = $id;
-        $this->api_secret_key   = $api_secret_key;
+
+        $this->id = $id;
+        if ($this->userExists($this->domain())) {
+            $this->api_secret_key = $api_secret_key;
+        }
     }
-    
+
+    public function userExists($endpoint)
+    {
+        $parsed_url = parse_url($endpoint);
+        $host       = $parsed_url['host'];
+
+        if (checkdnsrr($host, 'CNAME') === false) {
+            $url_parts = explode('.', $host);
+            $user      = $url_parts[0];
+            throw new \InvalidArgumentException("ApiClient Error: User '$user' not found", 404);
+        }
+
+        return true;
+    }
+
     public function userAuth()
     {
-        $url        = $this->domain() . '/user/auth';
-        
+        $url = $this->domain() . '/user/auth';
+
         try {
-            $response = $this->rest($url, 'GET', json_encode($this), $this->auth('GET', $url, null, time()));
-            $this->auth_valid = ((isset($response->status) && $response->status == 200) ? true : false);
-        } catch (Exception $e) {
+            $response         = $this->rest($url, 'GET', json_encode($this), $this->auth('GET', $url, null, time()));
+            $this->auth_valid = isset($response->status) && $response->status === 200;
+        } catch (\Exception $e) {
+            // We need to throw the excepction back to the base try caller
             $this->auth_valid = false;
+            throw $e;
         }
-        
+
         return $this->auth_valid;
     }
-    
+
     public function userCloud()
     {
         $url        = $this->domain() . '/user/cloud';
         $response   = $this->rest($url, 'GET', null, $this->auth('GET', $url, null, time()));
-        
-        \Configuration::updateValue('PIXELCRUSH_API_CLOUD_TTL', date('Y-m-d H:i:s', strtotime('+5 minutes')));
-        
+
         return $response->result;
     }
 
@@ -73,7 +89,7 @@ class ApiClient
     {
         $url        = $this->domain() . '/user/cdn/filter';
         $response   = $this->rest($url, 'POST', $filter, $this->auth('POST', $url, json_encode($filter), time()));
-        
+
         return $response->result;
     }
 
@@ -81,10 +97,10 @@ class ApiClient
     {
         $url        = $this->domain() . "/user/cdn/filter/$filter_name";
         $response   = $this->rest($url, 'DELETE', null, $this->auth('DELETE', $url, null, time()));
-        
+
         return $response->result;
     }
-    
+
     public function imgProxiedUrl($url, $params = null, $filter = null, $domains = null, $url_protocol = false)
     {
         // Add protocol to proxied url?
@@ -92,10 +108,10 @@ class ApiClient
         if (!empty($url_protocol)) {
             $url = $url_protocol . $url;
         }
-        
+
         $proxy_url = (string)$this->domain($domains, $url);
-        
-        if (isset($filter) && !empty($filter->name)) {
+
+        if ($filter !== null && !empty($filter->name)) {
             // cloud filter
             $proxy_url .= '/'. $filter->name .'/' . $url;
         } elseif (count($params)) {
@@ -105,49 +121,58 @@ class ApiClient
             // just acting as proxy on the original image
             $proxy_url .= '/'. $url;
         }
-        
+
         return urldecode($proxy_url);
     }
-    
-    public function domain($domains = null, $resource = null)
+
+    public function domain(array $domains = null, $resource = null)
     {
-        $domain = $this->id . ".pixelcrush.io";
-        
-        if (is_array($domains)) {
+        $domain = $this->id . '.pixelcrush.io';
+
+        if ($domains !== null) {
             $domains_len = count($domains);
-            
+
             if ($domains_len) {
                 $index  = empty($resource) ? $domains[0] : abs($this->strHashCode($resource) % $domains_len);
                 $domain = $domains[$index]->name;
             }
         }
-        
+
         // Use same site protocol for pixelcrush domain
-        return (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off' ? 'https' : 'http') . '://' . $domain;
+        return (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . $domain;
     }
 
-    public function rest($endpoint, $method = 'GET', $data = null, $get = null, $headers = null)
+    public function rest($endpoint, $method = 'GET', $data = null, $get = null)
     {
-        $response   = $this->restCall($endpoint, $method, $data, $get, $headers);
+        $response   = $this->restCall($endpoint, $method, $data, $get);
         $code       = $response->code;
-        
-        if (!empty($code) && in_array($code, array(200, 201))) {
+
+        if (in_array($code, array(200, 201), true)) {
             return $response->content;
-        } elseif (!empty($code) && $code == 401) {
-            throw new \Exception("Authentication Error", 401);
-        } elseif (checkdnsrr(parse_url($endpoint)['host'], 'CNAME') == false) {
-            $user = explode('.', parse_url($endpoint)['host'])[0];
-            throw new \Exception("ApiClient Error: User '$user' not found", 404);
-        } else {
-            throw new \Exception("ApiClient Exception: ".(!empty($response->content) ? $response->content->error : 'Unknown Error'), ($code ?: 500));
         }
+
+        if ($code === 401) {
+            throw new \RuntimeException('Pixelcrush Authentication Error', 401);
+        }
+
+        throw new \RuntimeException(
+            'Pixelcrush ApiClient Exception: '.(!empty($response->content) ? $response->content->error : 'Unknown Error'),
+            ($code ?: 500)
+        );
     }
-    
-    public function restCall($endpoint, $method = 'GET', $data = null, $get = null, $headers = null)
+
+    /**
+     * @param string $endpoint
+     * @param string $method
+     * @param mixed $data
+     * @param string $get
+     * @return object
+     */
+    public function restCall($endpoint, $method = 'GET', $data = null, $get = null)
     {
         $json_data = is_string($data) ? $data : json_encode($data);
 
-        if ($get != null) {
+        if ($get !== null) {
             $endpoint .= '?'. (is_string($get) ? $get : http_build_query($get));
         }
 
@@ -186,18 +211,18 @@ class ApiClient
 
         return (object)array('code'=>$code, 'content'=> json_decode($content));
     }
-    
-    public function auth($method, $op, $body, $time = false)
+
+    public function auth($method, $op, $body, $time = null)
     {
         $params = array('auth' => $this->customHmac('sha1', $method . $op . $body . $time, $this->api_secret_key));
-            
-        if (!is_null($time)) {
+
+        if ($time !== null) {
             $params['authttl'] = time();
         }
-        
+
         return $params;
     }
-    
+
     public function strHashCode($str)
     {
         $h = 0;
@@ -208,7 +233,7 @@ class ApiClient
 
         return $h;
     }
-    
+
     public function customHmac($algo, $data, $key, $raw_output = false)
     {
         $algo = \Tools::strtolower($algo);
@@ -216,20 +241,20 @@ class ApiClient
         $size = 64;
         $opad = str_repeat(chr(0x5C), $size);
         $ipad = str_repeat(chr(0x36), $size);
-    
+
         if (\Tools::strlen($key) > $size) {
             $key = str_pad(pack($pack, $algo($key)), $size, chr(0x00));
         } else {
             $key = str_pad($key, $size, chr(0x00));
         }
-    
+
         for ($i = 0; $i < \Tools::strlen($key) - 1; $i++) {
             $opad[$i] = $opad[$i] ^ $key[$i];
             $ipad[$i] = $ipad[$i] ^ $key[$i];
         }
-    
-        $output = $algo($opad.pack($pack, $algo($ipad.$data)));
-    
-        return ($raw_output) ? pack($pack, $output) : $output;
+
+        $output = $algo( $opad.pack($pack, $algo($ipad.$data)) );
+
+        return $raw_output ? pack($pack, $output) : $output;
     }
 }

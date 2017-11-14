@@ -1,0 +1,15 @@
+FROM prestashop/prestashop:${PS_DOCKER_VERSION}
+LABEL maintainer "Miguel Rasero <miguel@pixelcrush.io>"
+
+
+RUN apt-get -y update \
+ && apt-get install -y rsync \
+ && pecl install xdebug \
+ && apt-get -y clean \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY custom.ini /usr/local/etc/php/conf.d
+COPY dbg-entrypoint.sh /entrypoint.sh
+ 
+# Run
+CMD ["/entrypoint.sh"]

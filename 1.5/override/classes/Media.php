@@ -24,6 +24,17 @@
  
 class Media extends MediaCore
 {
+    private static function getPixelcrush()
+    {
+        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
+            $pixelcrush = Module::getInstanceByName('pixelcrush');
+
+            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
+                return $pixelcrush;
+            }
+        }
+    }
+
     public static function getJSPath($js_uri)
     {
         if (is_array($js_uri) || $js_uri === null || empty($js_uri)) {
@@ -44,17 +55,14 @@ class Media extends MediaCore
             return false;
         }
 
-        if (Context::getContext()->controller->controller_type == 'admin' && !array_key_exists('host', $url_data)) {
+        if (!array_key_exists('host', $url_data) && Context::getContext()->controller->controller_type === 'admin') {
             $js_uri = preg_replace('/^'.preg_quote(__PS_BASE_URI__, '/').'/', '/', $js_uri);
             $js_uri = dirname(preg_replace('/\?.+$/', '', $_SERVER['REQUEST_URI']).'a').'/..'.$js_uri;
         }
         
         // Pixelcrush: We will define a timestamp based on modification date of the file to be cached on pixelcrush
-        if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
-                $js_uri = $pixelcrush->cdnProxy($file_uri, $js_uri);
-            }
+        if (null !== $pixelcrush = self::getPixelcrush()) {
+            $js_uri = $pixelcrush->cdnProxy($file_uri, $js_uri);
         }
         
         return $js_uri;
@@ -67,29 +75,25 @@ class Media extends MediaCore
         }
         
         // remove PS_BASE_URI on _PS_ROOT_DIR_ for the following
-        
         $url_data = parse_url($css_uri);
         $file_uri = _PS_ROOT_DIR_.Tools::str_replace_once(__PS_BASE_URI__, DIRECTORY_SEPARATOR, $url_data['path']);
         
         // check if css files exists
-        if (!@filemtime($file_uri) && !array_key_exists('host', $url_data)) {
+        if (!array_key_exists('host', $url_data) && !@filemtime($file_uri)) {
             return false;
         }
 
-        if (Context::getContext()->controller->controller_type == 'admin') {
+        if (Context::getContext()->controller->controller_type === 'admin') {
             $css_uri = preg_replace('/^'.preg_quote(__PS_BASE_URI__, '/').'/', '/', $css_uri);
             $css_uri = dirname(preg_replace('/\?.+$/', '', $_SERVER['REQUEST_URI']).'a').'/..'.$css_uri;
         }
         
         // Pixelcrush: We will define a timestamp based on modification date of the file to be cached on pixelcrush
-        if (Module::IsEnabled('pixelcrush') && isset($file_uri)) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
-                $css_uri = $pixelcrush->cdnProxy($file_uri, $css_uri);
-            }
+        if (null !== $pixelcrush = self::getPixelcrush()) {
+            $css_uri = $pixelcrush->cdnProxy($file_uri, $css_uri);
         }
         
-        // Fixes url malformating on css's @import(file)b
+        // Fixes url broken formatting on css's @import(file)b
         if (strpos($css_uri, '/..http') !== false) {
             $css_uri = Tools::substr($css_uri, strpos($css_uri, '/..http')+3);
         }

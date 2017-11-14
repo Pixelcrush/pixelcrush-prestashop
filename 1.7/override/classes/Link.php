@@ -24,14 +24,21 @@
  
 class Link extends LinkCore
 {
-    public function getImageLink($name, $ids, $type = null)
+    private function getPixelcrush()
     {
         if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
             $pixelcrush = Module::getInstanceByName('pixelcrush');
-            
+
             if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
-                return $pixelcrush->pixelcrushProxy(parent::getImageLink($name, $ids), 'products', $type);
+                return $pixelcrush;
             }
+        }
+    }
+
+    public function getImageLink($name, $ids, $type = null)
+    {
+        if (null !== $pixelcrush = $this->getPixelcrush()) {
+            return $pixelcrush->pixelcrushProxy(parent::getImageLink($name, $ids), 'products', $type);
         }
         
         return parent::getImageLink($name, $ids, $type);
@@ -39,12 +46,8 @@ class Link extends LinkCore
     
     public function getSupplierImageLink($id_supplier, $type = null)
     {
-        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
-                return $pixelcrush->pixelcrushProxy(parent::getSupplierImageLink($id_supplier, $type), 'suppliers', null);
-            }
+        if (null !== $pixelcrush = $this->getPixelcrush()) {
+            return $pixelcrush->pixelcrushProxy(parent::getSupplierImageLink($id_supplier, $type), 'suppliers', $type);
         }
         
         return parent::getSupplierImageLink($id_supplier, $type);
@@ -52,12 +55,8 @@ class Link extends LinkCore
     
     public function getCatImageLink($name, $id_category, $type = null)
     {
-        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
-                return $pixelcrush->pixelcrushProxy(parent::getCatImageLink($name, $id_category), 'categories', $type);
-            }
+        if (null !== $pixelcrush = $this->getPixelcrush()) {
+            return $pixelcrush->pixelcrushProxy(parent::getCatImageLink($name, $id_category), 'categories', $type);
         }
         
         return parent::getCatImageLink($name, $id_category, $type);
@@ -65,12 +64,12 @@ class Link extends LinkCore
     
     public function getManufacturerImageLink($id_manufacturer, $type = null)
     {
-        if (Module::IsInstalled('pixelcrush') && Module::isEnabled('pixelcrush')) {
-            $pixelcrush = Module::getInstanceByName('pixelcrush');
-            
-            if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_images) {
-                return $pixelcrush->pixelcrushProxy(parent::getManufacturerImageLink($id_manufacturer, $type), 'manufacturers', $type);
-            }
+        if (null !== $pixelcrush = $this->getPixelcrush()) {
+            return $pixelcrush->pixelcrushProxy(
+                parent::getManufacturerImageLink($id_manufacturer, $type),
+                'manufacturers',
+                $type
+            );
         }
             
         return parent::getManufacturerImageLink($id_manufacturer, $type);

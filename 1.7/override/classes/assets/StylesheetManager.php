@@ -26,30 +26,21 @@
 
 class StylesheetManager extends StylesheetManagerCore
 {
-    private $valid_media = array(
-        'all',
-        'braille',
-        'embossed',
-        'handheld',
-        'print',
-        'projection',
-        'screen',
-        'speech',
-        'tty',
-        'tv',
-    );
-    
+    //This var needs to be in one-line because PrestaShop 1.7 fails cleaning multi-line
+    // vars override correctly while uninstalling modules
+    private $valid_media = array('all', 'braille', 'embossed', 'handheld', 'print', 'projection', 'screen', 'speech', 'tty', 'tv');
+
     protected function add($id, $fullPath, $media, $priority, $inline, $server)
     {
         $priority = is_int($priority) ? $priority : self::DEFAULT_PRIORITY;
         $media = $this->getSanitizedMedia($media);
 
         if ('remote' === $server) {
-            $uri = $fullPath;
+            $uri  = $fullPath;
             $type = 'external';
         } else {
-            $uri = $this->getFQDN().parent::getUriFromPath($fullPath);
-            $type = ($inline) ? 'inline' : 'external';
+            $uri  = $this->getFQDN().parent::getUriFromPath($fullPath);
+            $type = $inline ? 'inline' : 'external';
         }
         
         // Build Pixelcrush Proxied URL
@@ -61,19 +52,19 @@ class StylesheetManager extends StylesheetManagerCore
         }
 
         $this->list[$type][$id] = array(
-            'id' => $id,
-            'type' => $type,
-            'path' => $fullPath,
-            'uri' => $uri,
-            'media' => $media,
+            'id'       => $id,
+            'type'     => $type,
+            'path'     => $fullPath,
+            'uri'      => $uri,
+            'media'    => $media,
             'priority' => $priority,
-            'server' => $server,
+            'server'   => $server,
         );
     }
 
     protected function getSanitizedMedia($media)
     {
-        // Overrided visibility
+        // Overridden visibility
         return in_array($media, $this->valid_media, true) ? $media : self::DEFAULT_MEDIA;
     }
 }

@@ -1,0 +1,55 @@
+version: '2.1'
+
+services:
+  db:
+    image: mysql:${MYSQL_VERSION}
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+    volumes:
+      - db_data:/var/lib/mysql
+
+  prestashop:
+    build: .
+    tmpfs:
+    - /tmp/cache
+    environment:
+      XDEBUG: 1
+      XDEBUG_HOST: ${XDEBUG_HOST}
+      XDEBUG_IDEKEY: ${XDEBUG_IDEKEY}
+      DEBUG_GROUP_ID: ${DEBUG_GROUP_ID}
+      PIXELCRUSH_USERID: ${PIXELCRUSH_USERID} 
+      PIXELCRUSH_API_SECRET: ${PIXELCRUSH_API_SECRET} 
+      PS_INSTALL_AUTO: 1
+      PS_DEV_MODE: 1
+      PS_DOMAIN: ${PS_DOMAIN}
+      PS_FOLDER_ADMIN: backend
+      DB_SERVER: db
+      DB_PASSWD: admin
+      ADMIN_MAIL: info@pixelcrush.io
+      ADMIN_PASSWD: admin
+    volumes:
+      - ./dbg-entrypoint.sh:/entrypoint.sh
+      - ./custom.ini:/usr/local/etc/php/conf.d/custom.ini
+      - ./${OUT_DEBUG_FOLDER}:/var/www/host
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - db
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports: 
+      - 81:80 
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: admin
+    depends_on:
+      - db
+    
+volumes:
+  db_data:
+
