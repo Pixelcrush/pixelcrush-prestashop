@@ -22,7 +22,7 @@ A Pixelcrush account is required to use this module. Please create an [account](
 
 ## Installing
 
-See instructions for [install](https://github.com/your/project/contributors).
+See instructions for [install](https://www.pixelcrush.io/plugins/prestashop).
 
 ### Updates
 This is an official addon, built and supported by the Pixelcrush team. The PrestaShop CDN module is frequently updated and all versions of PrestaShop from 1.5.x and upwards are supported.
