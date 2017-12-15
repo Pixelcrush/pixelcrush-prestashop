@@ -121,6 +121,7 @@ fi
 rm -R /var/www/html/install
 
 # Clone with local directory and move old container directory
+cd /var/www
 mv /var/www/html /var/www/html.container
 rsync -a -l -t --delete /var/www/html.container/ /var/www/host/root/
 ln -s /var/www/host/root /var/www/html
