@@ -1,4 +1,4 @@
-![Pixelcrush](https://www.pixelcrush.io/images/pixelcrush/logo_pixelcrush.png)
+![Pixelcrush](https://www.pixelcrush.io/img/pixelcrush/logo_pixelcrush.png)
 #  pixelcrush-prestashop
  Pixelcrush module for PrestaShop
 
