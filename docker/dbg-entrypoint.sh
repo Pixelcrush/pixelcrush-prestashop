@@ -126,6 +126,7 @@ mv /var/www/html /var/www/html.container
 rsync -a -l -t --delete /var/www/html.container/ /var/www/host/root/
 ln -s /var/www/host/root /var/www/html
 cp -a /var/www/host/module/pixelcrush /var/www/host/root/modules
+rm -R /var/www/host/module
 chown -R www-data:www-data /var/www/host/root
 
 if [ "${PIXELCRUSH_USERID}" != "" ] && [ "${PIXELCRUSH_API_SECRET}" != "" ]; then  

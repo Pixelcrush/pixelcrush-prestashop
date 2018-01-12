@@ -99,6 +99,7 @@ rm "${out_module_dir}/pixelcrush-${PS_VERSION}.zip"
 envsubst < Dockerfile.template > Dockerfile
 
 echo "Cleaning old resources and starting compose..."
+find ./ -type l -name cache -exec rm {} \;
 # Check if new images are ready to be downloaded.
 docker-compose pull --parallel
 # Remove existing network and data volumes related to this compose

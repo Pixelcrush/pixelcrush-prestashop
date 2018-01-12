@@ -39,25 +39,30 @@ class Pixelcrush extends Module
     public $user_cloud;
     public $cloud_filters_hash;
     public $images_types_hash;
+    public $bootstrap;
 
     public function __construct()
     {
-        $this->name         = 'pixelcrush';
-        $this->tab          = 'administration';
-        $this->version      = '1.2.0';
-        $this->author       = 'pixelcrush.io';
-        $this->bootstrap    = true;
+        $this->name           = 'pixelcrush';
+        $this->tab            = 'administration';
+        $this->version        = '1.2.1';
+        $this->author         = 'pixelcrush.io';
+        $this->bootstrap      = true;
+        $this->need_instance  = 1;
+        $this->module_key     = 'f06ff8e65629b4d85e63752cfbf1d457';
+        $this->displayName    = $this->l('Pixelcrush CDN');
+        $this->description    = $this->l('Make your shop extremely faster and forget managing images.');
 
         $this->ps_versions_compliancy = array('min' => '1.7', 'max' => '1.7.9.9');
-        $this->need_instance = 1;
-        $this->module_key = 'f06ff8e65629b4d85e63752cfbf1d457';
-
-        $this->displayName  = $this->l('Pixelcrush CDN');
-        $this->description  = $this->l('Make your shop extremely faster and forget managing images.');
 
         parent::__construct();
     }
 
+    /**
+     * @return bool
+     * @throws \RuntimeException
+     * @throws PrestaShopException
+     */
     public function install()
     {
         // Assets directory is not available in PS 1.7 for example
@@ -72,6 +77,10 @@ class Pixelcrush extends Module
                $this->registerHook('displayBackOfficeHeader');
     }
 
+    /**
+     * @param $dirname
+     * @throws \RuntimeException
+     */
     public function checkOverrideDirectory($dirname)
     {
         $full_path = _PS_ROOT_DIR_ . DIRECTORY_SEPARATOR . 'override'
@@ -121,10 +130,10 @@ class Pixelcrush extends Module
 
             if ($this->validateConfig($submit)) {
                 // We need to re-initialize config and errors in case the user has changed its user-apiKey to reAuth
-                $this->client  = null;
-                $this->config  = null;
-                $this->_errors = array();
-                $this->user_cloud = null;
+                $this->client      = null;
+                $this->config      = null;
+                $this->_errors     = array();
+                $this->user_cloud  = null;
 
                 $this->setConfig($submit);
 
@@ -172,7 +181,7 @@ class Pixelcrush extends Module
         }
 
         $is_valid  = true;
-        $is_valid &= (int)$config->enable_images === 1 || (int)$config->enable_images === 0;
+        $is_valid &= (int)$config->enable_images === 1  || (int)$config->enable_images === 0;
         $is_valid &= (int)$config->enable_statics === 1 || (int)$config->enable_statics === 0;
         $is_valid &= Tools::strlen($config->user_account) >= 3;
         $is_valid &= Tools::strlen($config->api_secret) === 36 && preg_match($UUIDv4_format, $config->api_secret) === 1;
@@ -196,19 +205,19 @@ class Pixelcrush extends Module
             ),
             'input' => array(
                 array(
-                    'type' => version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch',
-                    'label' => $this->l('Enable Image CDN'),
-                    'name' => 'PIXELCRUSH_ENABLE_IMAGES',
+                    'type'     => version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch',
+                    'label'    => $this->l('Enable Image CDN'),
+                    'name'     => 'PIXELCRUSH_ENABLE_IMAGES',
                     'required' => true,
-                    'is_bool' => true,
-                    'values' => array(
+                    'is_bool'  => true,
+                    'values'   => array(
                         array(
-                            'id' => 'active_on',
+                            'id'    => 'active_on',
                             'value' => 1,
                             'label' => $this->l('Yes')
                         ),
                         array(
-                            'id' => 'active_off',
+                            'id'    => 'active_off',
                             'value' => 0,
                             'label' => $this->l('No')
                         )
@@ -216,19 +225,19 @@ class Pixelcrush extends Module
                     'lang' => false,
                 ),
                 array(
-                    'type' => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
-                    'label' => $this->l('Enable Static CDN (.js / .css files)'),
-                    'name' => 'PIXELCRUSH_ENABLE_STATICS',
+                    'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
+                    'label'    => $this->l('Enable Static CDN (.js / .css files)'),
+                    'name'     => 'PIXELCRUSH_ENABLE_STATICS',
                     'required' => true,
-                    'is_bool' => true,
-                    'values' => array(
+                    'is_bool'  => true,
+                    'values'   => array(
                         array(
-                            'id' => 'active_on',
+                            'id'    => 'active_on',
                             'value' => 1,
                             'label' => $this->l('Yes')
                         ),
                         array(
-                            'id' => 'active_off',
+                            'id'    => 'active_off',
                             'value' => 0,
                             'label' => $this->l('No')
                         )
@@ -240,83 +249,83 @@ class Pixelcrush extends Module
                         title="Webfont config">in our docs</a>.',
                 ),
                 array(
-                    'type' => 'text',
-                    'label' => $this->l('User Account'),
-                    'name' => 'PIXELCRUSH_USER_ACCOUNT',
-                    'class' => 'col-sm-30',
-                    'size' => 24,
+                    'type'     => 'text',
+                    'label'    => $this->l('User Account'),
+                    'name'     => 'PIXELCRUSH_USER_ACCOUNT',
+                    'class'    => 'col-sm-30',
+                    'size'     => 24,
                     'required' => true,
-                    'lang' => false,
+                    'lang'     => false,
                 ),
                 array(
-                    'type' => 'text',
-                    'label' => $this->l('Api Secret'),
-                    'name' => 'PIXELCRUSH_API_SECRET',
-                    'size' => 36,
-                    'class' => 'col-sm-30',
+                    'type'     => 'text',
+                    'label'    => $this->l('Api Secret'),
+                    'name'     => 'PIXELCRUSH_API_SECRET',
+                    'size'     => 36,
+                    'class'    => 'col-sm-30',
                     'required' => true,
-                    'lang' => false,
+                    'lang'     => false,
                 ),
                 array(
-                    'type' => 'text',
-                    'label' => $this->l('Filter Alias Prefix'),
-                    'name' => 'PIXELCRUSH_FILTERS_PREFIX',
-                    'class' => 'col-sm-30',
-                    'size' => 12,
+                    'type'     => 'text',
+                    'label'    => $this->l('Filter Alias Prefix'),
+                    'name'     => 'PIXELCRUSH_FILTERS_PREFIX',
+                    'class'    => 'col-sm-30',
+                    'size'     => 12,
                     'required' => true,
-                    'lang' => false,
+                    'lang'     => false,
                 ),
                 array(
-                    'type' => 'checkbox',
+                    'type'    => 'checkbox',
                     'label'   => $this->l('Reset Existing Filters'),
                     'desc'    => $this->l('If this option is checked, any existing filter on your pixelcrush account
                                             will be deleted before uploading the actual ones.'),
-                    'name' => 'reset_filters',
+                    'name'   => 'reset_filters',
                     'values' => array(
                         'query' => array(
                             array(
-                                'id' => 'checked',
+                                'id'   => 'checked',
                                 'name' => '',
-                                'val' => '1'
+                                'val'  => '1'
                             ),
                         ),
-                        'id' => 'id',
+                        'id'   => 'id',
                         'name' => 'name'
                     )
                 ),
                 array(
-                    'type' => 'select',
+                    'type'  => 'select',
                     'label' => $this->l('Add protocol to proxied url:'),
-                    'desc' => $this->l('Adds protocol to original resource url. If this is not set pixelcrush will
+                    'desc'  => $this->l('Adds protocol to original resource url. If this is not set pixelcrush will
                                         access the resources using always http.'),
-                    'name' => 'PIXELCRUSH_URL_PROTOCOL',
+                    'name'     => 'PIXELCRUSH_URL_PROTOCOL',
                     'required' => true,
-                    'options' => array(
-                        'id' => 'id_option',
-                        'name' => 'name',
-                        'query' => array(
+                    'options'  => array(
+                        'id'     => 'id_option',
+                        'name'   => 'name',
+                        'query'  => array(
                             array(
                                 'id_option' => '',
-                                'name' => 'Without Protocol'
+                                'name'      => 'Without Protocol'
                             ),
                             array(
                                 'id_option' => 'http://',
-                                'name' => 'http://'
+                                'name'      => 'http://'
                             ),
                             array(
                                 'id_option' => 'https://',
-                                'name' => 'https://'
+                                'name'      => 'https://'
                             ),
                         )
                     )
                 ),
                 array(
-                    'type' => 'color',
-                    'label' => $this->l('Fill Background'),
-                    'name' => 'PIXELCRUSH_FILL_BACKGROUND',
-                    'lang' => false,
-                    'size' => 15,
-                    'desc' => $this->l('Use color picker for color.'),
+                    'type'     => 'color',
+                    'label'    => $this->l('Fill Background'),
+                    'name'     => 'PIXELCRUSH_FILL_BACKGROUND',
+                    'lang'     => false,
+                    'size'     => 15,
+                    'desc'     => $this->l('Use color picker for color.'),
                     'required' => false
                 ),
             ),
@@ -329,8 +338,8 @@ class Pixelcrush extends Module
         // Adds logo on top of the configuration form for PS 1.6+
         if (version_compare(_PS_VERSION_, '1.6.0', '>=')) {
             $img = array(
-                'type' => 'html',
-                'name' => 'PIXELCRUSH_logo',
+                'type'         => 'html',
+                'name'         => 'PIXELCRUSH_logo',
                 'html_content' => '<img id="pixelcrush-logo-hd" '
                     .'src="../modules/pixelcrush/views/img/pixelcrush-logo.png" />'
             );
@@ -340,21 +349,21 @@ class Pixelcrush extends Module
         $helper = new HelperForm();
 
         // Module, token and currentIndex
-        $helper->module = $this;
+        $helper->module          = $this;
         $helper->name_controller = $this->name;
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex.'&configure='.$this->name;
+        $helper->token           = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex    = AdminController::$currentIndex.'&configure='.$this->name;
 
         // Language
-        $helper->default_form_language = $this->context->language->id;
+        $helper->default_form_language    = $this->context->language->id;
         $helper->allow_employee_form_lang = $this->context->language->id;
 
         // Title and toolbar
-        $helper->title = $this->displayName;
-        $helper->show_toolbar = true;
+        $helper->title          = $this->displayName;
+        $helper->show_toolbar   = true;
         $helper->toolbar_scroll = true;
-        $helper->submit_action = 'submit'.$this->name;
-        $helper->toolbar_btn = array(
+        $helper->submit_action  = 'submit'.$this->name;
+        $helper->toolbar_btn    = array(
             'save' => array(
                 'desc' => $this->l('Save'),
                 'href' => AdminController::$currentIndex.'&configure='.$this->name.'&save'.$this->name.
@@ -378,6 +387,9 @@ class Pixelcrush extends Module
         return $helper->generateForm($fields_form);
     }
 
+    /**
+     * @throws PrestaShopDatabaseException
+     */
     public function loadImagesTypeHashes()
     {
         if (!is_array($this->images_types_hash)) {
@@ -420,6 +432,10 @@ class Pixelcrush extends Module
         return Tools::substr($entity, 0, 2) . '_' . $type;
     }
 
+    /**
+     * @return array
+     * @throws PrestaShopDatabaseException
+     */
     public function imageTypesAsFilters()
     {
         $this->loadImagesTypeHashes();
@@ -443,6 +459,13 @@ class Pixelcrush extends Module
         return $filters;
     }
 
+    /**
+     * @param $url
+     * @param $entity
+     * @param $type
+     * @return string
+     * @throws PrestaShopDatabaseException
+     */
     public function pixelcrushProxy($url, $entity, $type)
     {
         $params           = array();
@@ -492,20 +515,18 @@ class Pixelcrush extends Module
     {
         $cdn_uri = null;
 
-        if ($this->getClient()) {
-            if (@filemtime($local_uri) && @filesize($local_uri)) {
-                $pixelcrush_proxy = $this->client->domain().'/cdn/';
-                $pixelcrush_ts = '?ttl='.filemtime($local_uri);
+        if ($this->getClient() && @filemtime($local_uri) && @filesize($local_uri)) {
+            $pixelcrush_proxy = $this->client->domain().'/cdn/';
+            $pixelcrush_ts    = '?ttl='.filemtime($local_uri);
 
-                if ($newAssetManager) {
-                    // 1.7: AbstractAssetManager
-                    $url     = preg_replace('(^https?://)', '', ltrim(__PS_BASE_URI__.$remote_uri, '/'));
-                    $cdn_uri = $pixelcrush_proxy. Configuration::get('PIXELCRUSH_URL_PROTOCOL'). $url. $pixelcrush_ts;
-                } else {
-                    // Legacy 1.7 / 1.6 / 1.5 Media
-                    $cdn_uri = $pixelcrush_proxy.Tools::getHttpHost((bool)Configuration::get('PIXELCRUSH_URL_PROTOCOL'))
-                        . __PS_BASE_URI__ . ltrim($remote_uri, '/') . $pixelcrush_ts;
-                }
+            if ($newAssetManager) {
+                // 1.7: AbstractAssetManager
+                $url     = preg_replace('(^https?://)', '', ltrim(__PS_BASE_URI__.$remote_uri, '/'));
+                $cdn_uri = $pixelcrush_proxy. Configuration::get('PIXELCRUSH_URL_PROTOCOL'). $url. $pixelcrush_ts;
+            } else {
+                // Legacy 1.7 / 1.6 / 1.5 Media
+                $cdn_uri = $pixelcrush_proxy . Configuration::get('PIXELCRUSH_URL_PROTOCOL') . Tools::getShopDomain()
+                    . __PS_BASE_URI__ . ltrim($remote_uri, '/') . $pixelcrush_ts;
             }
         }
 
@@ -532,10 +553,11 @@ class Pixelcrush extends Module
         return !empty($this->config->id) && !empty($this->config->api_secret_key);
     }
 
-    public function hookDisplayBackOfficeHeader(array $params) {
+    public function hookDisplayBackOfficeHeader(array $params)
+    {
         // Load js/css styling files strictly only when user is on the configure module page
         if ($this->context->controller->controller_name === 'AdminModules' &&
-            Tools::getIsset('configure') && Tools::getValue('configure') == 'pixelcrush'
+            Tools::getIsset('configure') && Tools::getValue('configure') === 'pixelcrush'
         ) {
             if (version_compare(_PS_VERSION_, '1.6.0', '<')) {
                 $this->context->controller->addJS($this->_path . 'views/js/pixelcrush-bo.js');

@@ -31,6 +31,12 @@ class ApiClient
 
     public $auth_valid = false;
 
+    /**
+     * ApiClient constructor.
+     * @param $id
+     * @param $api_secret_key
+     * @throws \InvalidArgumentException
+     */
     public function __construct($id, $api_secret_key)
     {
         if (empty($id)) {
@@ -47,6 +53,11 @@ class ApiClient
         }
     }
 
+    /**
+     * @param $endpoint
+     * @return bool
+     * @throws \InvalidArgumentException
+     */
     public function userExists($endpoint)
     {
         $parsed_url = parse_url($endpoint);
@@ -61,6 +72,10 @@ class ApiClient
         return true;
     }
 
+    /**
+     * @return bool
+     * @throws \Exception
+     */
     public function userAuth()
     {
         $url = $this->domain() . '/user/auth';
@@ -69,7 +84,7 @@ class ApiClient
             $response         = $this->rest($url, 'GET', json_encode($this), $this->auth('GET', $url, null, time()));
             $this->auth_valid = isset($response->status) && $response->status === 200;
         } catch (\Exception $e) {
-            // We need to throw the excepction back to the base try caller
+            // We need to throw the exception back to the base try caller
             $this->auth_valid = false;
             throw $e;
         }
@@ -77,6 +92,10 @@ class ApiClient
         return $this->auth_valid;
     }
 
+    /**
+     * @return mixed
+     * @throws \RuntimeException
+     */
     public function userCloud()
     {
         $url        = $this->domain() . '/user/cloud';
@@ -85,6 +104,11 @@ class ApiClient
         return $response->result;
     }
 
+    /**
+     * @param $filter
+     * @return mixed
+     * @throws \RuntimeException
+     */
     public function userCdnFilterUpsert($filter)
     {
         $url        = $this->domain() . '/user/cdn/filter';
@@ -93,6 +117,11 @@ class ApiClient
         return $response->result;
     }
 
+    /**
+     * @param $filter_name
+     * @return mixed
+     * @throws \RuntimeException
+     */
     public function userCdnFilterDelete($filter_name)
     {
         $url        = $this->domain() . "/user/cdn/filter/$filter_name";
@@ -101,6 +130,15 @@ class ApiClient
         return $response->result;
     }
 
+
+    /**
+     * @param $url
+     * @param null $params
+     * @param null $filter
+     * @param null $domains
+     * @param bool $url_protocol
+     * @return string
+     */
     public function imgProxiedUrl($url, $params = null, $filter = null, $domains = null, $url_protocol = false)
     {
         // Add protocol to proxied url?
@@ -125,7 +163,13 @@ class ApiClient
         return urldecode($proxy_url);
     }
 
-    public function domain(array $domains = null, $resource = null)
+    /**
+     * @param array|null $domains
+     * @param null $resource
+     * @param bool $force_ssl
+     * @return string
+     */
+    public function domain(array $domains = null, $resource = null, $force_ssl = true)
     {
         $domain = $this->id . '.pixelcrush.io';
 
@@ -138,10 +182,35 @@ class ApiClient
             }
         }
 
-        // Use same site protocol for pixelcrush domain
-        return (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . $domain;
+        $protocol = null;
+        if ($force_ssl) {
+            $protocol = 'https://';
+        } else {
+            // Use same site protocol for pixelcrush domain
+            $proxy_proto  = null; // take load balancer into account
+            if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+                $proxy_proto = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+            } elseif (isset($_SERVER['X-Forwarded-Proto'])) {
+                $proxy_proto = $_SERVER['X-Forwarded-Proto'];
+            }
+
+            $protocol = $proxy_proto;
+            if ($protocol === null) {
+                $protocol = 'http' . (isset($_SERVER['HTTPS']) ? 's' : '');
+            }
+        }
+
+        return $protocol . $domain;
     }
 
+    /**
+     * @param $endpoint
+     * @param string $method
+     * @param null $data
+     * @param null $get
+     * @return mixed
+     * @throws \RuntimeException
+     */
     public function rest($endpoint, $method = 'GET', $data = null, $get = null)
     {
         $response   = $this->restCall($endpoint, $method, $data, $get);
@@ -156,7 +225,9 @@ class ApiClient
         }
 
         throw new \RuntimeException(
-            'Pixelcrush ApiClient Exception: '.(!empty($response->content) ? $response->content->error : 'Unknown Error'),
+            'Pixelcrush ApiClient Exception: '. ( !empty($response->content)
+                                                  ? $response->content->error
+                                                  : 'Unknown Error' ),
             ($code ?: 500)
         );
     }
@@ -166,7 +237,7 @@ class ApiClient
      * @param string $method
      * @param mixed $data
      * @param string $get
-     * @return object
+     * @return \stdClass
      */
     public function restCall($endpoint, $method = 'GET', $data = null, $get = null)
     {
@@ -186,8 +257,8 @@ class ApiClient
         curl_setopt($handle, CURLOPT_URL, $endpoint);
         curl_setopt($handle, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
+        //curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, false);
+        //curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
 
         switch (\Tools::strtoupper($method)) {
             case 'GET':
@@ -212,6 +283,13 @@ class ApiClient
         return (object)array('code'=>$code, 'content'=> json_decode($content));
     }
 
+    /**
+     * @param $method
+     * @param $op
+     * @param $body
+     * @param null $time
+     * @return array
+     */
     public function auth($method, $op, $body, $time = null)
     {
         $params = array('auth' => $this->customHmac('sha1', $method . $op . $body . $time, $this->api_secret_key));
@@ -223,6 +301,10 @@ class ApiClient
         return $params;
     }
 
+    /**
+     * @param $str
+     * @return int
+     */
     public function strHashCode($str)
     {
         $h = 0;
@@ -234,6 +316,13 @@ class ApiClient
         return $h;
     }
 
+    /**
+     * @param $algo
+     * @param $data
+     * @param $key
+     * @param bool $raw_output
+     * @return string
+     */
     public function customHmac($algo, $data, $key, $raw_output = false)
     {
         $algo = \Tools::strtolower($algo);
