@@ -83,6 +83,11 @@ elif [ "${ps_version}" = "1.6" ]
 elif [ "${ps_version}" = "1.7" ]
   then
     cp -a 1.7/* "${tmp_dir}/pixelcrush"
+    sed -e "s/\$this->ps_versions_compliancy.*/\$this->ps_versions_compliancy = array\(\'min\' => \'1.7\', \'max\' => \'1.7.9.9\'\);/g" \
+        "${tmp_dir}/pixelcrush/pixelcrush.php" > "${tmp_dir}/pixelcrush/pixelcrush.php.new"
+    
+    mv "${tmp_dir}/pixelcrush/pixelcrush.php.new" "${tmp_dir}/pixelcrush/pixelcrush.php"
+
     out_fname="${out_dir}/pixelcrush-1.7.zip"
 
 else

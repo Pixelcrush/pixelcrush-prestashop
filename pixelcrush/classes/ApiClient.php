@@ -28,8 +28,9 @@ class ApiClient
 {
     private $id;
     private $api_secret_key;
+    private $cached_domain;
 
-    public $auth_valid = false;
+    public $auth_valid;
 
     /**
      * ApiClient constructor.
@@ -48,28 +49,19 @@ class ApiClient
         }
 
         $this->id = $id;
-        if ($this->userExists($this->domain())) {
-            $this->api_secret_key = $api_secret_key;
-        }
+        $this->api_secret_key = $api_secret_key;
     }
 
     /**
-     * @param $endpoint
+     * @param string $endpoint
      * @return bool
-     * @throws \InvalidArgumentException
      */
-    public function userExists($endpoint)
+    public function domainExists($endpoint)
     {
         $parsed_url = parse_url($endpoint);
         $host       = $parsed_url['host'];
 
-        if (checkdnsrr($host, 'CNAME') === false) {
-            $url_parts = explode('.', $host);
-            $user      = $url_parts[0];
-            throw new \InvalidArgumentException("ApiClient Error: User '$user' not found", 404);
-        }
-
-        return true;
+        return !(checkdnsrr($host, 'CNAME') === false);
     }
 
     /**
@@ -78,6 +70,10 @@ class ApiClient
      */
     public function userAuth()
     {
+        if ($this->auth_valid !== null) {
+            return $this->auth_valid;
+        }
+
         $url = $this->domain() . '/user/auth';
 
         try {
@@ -135,11 +131,10 @@ class ApiClient
      * @param $url
      * @param null $params
      * @param null $filter
-     * @param null $domains
      * @param bool $url_protocol
      * @return string
      */
-    public function imgProxiedUrl($url, $params = null, $filter = null, $domains = null, $url_protocol = false)
+    public function imgProxiedUrl($url, $params = null, $filter = null, $url_protocol = false)
     {
         // Add protocol to proxied url?
         $url = preg_replace('#^https?://#', '', $url);
@@ -147,7 +142,7 @@ class ApiClient
             $url = $url_protocol . $url;
         }
 
-        $proxy_url = (string)$this->domain($domains, $url);
+        $proxy_url = $this->domain();
 
         if ($filter !== null && !empty($filter->name)) {
             // cloud filter
@@ -164,28 +159,19 @@ class ApiClient
     }
 
     /**
-     * @param array|null $domains
-     * @param null $resource
      * @param bool $force_ssl
      * @return string
      */
-    public function domain(array $domains = null, $resource = null, $force_ssl = true)
+    public function domain($force_ssl = true)
     {
-        $domain = $this->id . '.pixelcrush.io';
-
-        if ($domains !== null) {
-            $domains_len = count($domains);
-
-            if ($domains_len) {
-                $index  = empty($resource) ? $domains[0] : abs($this->strHashCode($resource) % $domains_len);
-                $domain = $domains[$index]->name;
-            }
+        if ($this->cached_domain !== null) {
+            return $this->cached_domain;
         }
 
-        $protocol = null;
-        if ($force_ssl) {
-            $protocol = 'https://';
-        } else {
+        $domain   = $this->id . '.pixelcrush.io';
+        $protocol = 'https://';
+
+        if (!$force_ssl) {
             // Use same site protocol for pixelcrush domain
             $proxy_proto  = null; // take load balancer into account
             if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
@@ -200,7 +186,9 @@ class ApiClient
             }
         }
 
-        return $protocol . $domain;
+        $this->cached_domain = $protocol . $domain;
+
+        return $this->cached_domain;
     }
 
     /**
@@ -299,21 +287,6 @@ class ApiClient
         }
 
         return $params;
-    }
-
-    /**
-     * @param $str
-     * @return int
-     */
-    public function strHashCode($str)
-    {
-        $h = 0;
-
-        for ($i=0; $i < \Tools::strlen($str); $i++) {
-            $h = (int)(31 * $h + ord($str[$i])) & 0xffffffff;
-        }
-
-        return $h;
     }
 
     /**

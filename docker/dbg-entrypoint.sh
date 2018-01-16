@@ -149,5 +149,10 @@ umask 0002
 rm -R /var/www/host/root/cache
 ln -s /tmp/cache /var/www/host/root
 
+if [[ "$PS_VERSION" =~ ^1.7.* ]]; then
+    rm -R /var/www/host/root/app/cache
+    ln -s /tmp/cache-1.7 /var/www/host/root/app/cache
+fi
+
 echo "Almost! Starting Apache now..";
 exec apache2-foreground

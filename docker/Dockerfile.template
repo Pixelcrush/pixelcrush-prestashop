@@ -3,8 +3,11 @@ LABEL maintainer "Miguel Rasero <miguel@pixelcrush.io>"
 
 
 RUN apt-get -y update \
- && apt-get install -y rsync \
+ && apt-get install -y rsync libmemcached-dev \
  && pecl install xdebug \
+ && pecl install memcached-2.2.0 \
+ && pecl install apcu-4.0.11 \
+ && docker-php-ext-enable apcu memcached \
  && apt-get -y clean \
  && rm -rf /var/lib/apt/lists/*
 

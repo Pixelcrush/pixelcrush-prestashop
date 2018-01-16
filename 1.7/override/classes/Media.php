@@ -59,12 +59,15 @@ class Media extends MediaCore
         if (Module::IsEnabled('pixelcrush') && isset($file_uri)
         ) {
             // We need to bypass module.js document.styleSheets[0].cssRules.lenght checking
-            if ($_SERVER['PATH_INFO'] === '/module/catalog' &&
+            if (isset($_SERVER['PATH_INFO']) &&
+                $_SERVER['PATH_INFO'] === '/module/catalog' &&
+                self::$first_bo_css_loaded === 0 &&
                 Context::getContext()->controller->controller_name === 'AdminModules' &&
-                self::$first_bo_css_loaded === 0 && pathinfo($media_uri, PATHINFO_EXTENSION) === 'css'
+                pathinfo($media_uri, PATHINFO_EXTENSION) === 'css'
             ) {
                 self::$first_bo_css_loaded = 1;
             } else {
+                /* @var \Pixelcrush */
                 $pixelcrush = Module::getInstanceByName('pixelcrush');
                 if ($pixelcrush->isConfigured() && $pixelcrush->config->enable_statics) {
                     $media_uri = $pixelcrush->cdnProxy($file_uri, $media_uri);
@@ -90,7 +93,7 @@ class Media extends MediaCore
         if ($need_rtl && Context::getContext()->language->is_rtl) {
             $css_uri_rtl = preg_replace('/(^[^.].*)(\.css)$/', '$1_rtl.css', $css_uri);
             $rtl_media = self::getMediaPath($css_uri_rtl, $css_media_type);
-            if ($rtl_media != false) {
+            if ($rtl_media !== false) {
                 return $rtl_media;
             }
         }

@@ -26,15 +26,18 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once(dirname(__FILE__) . '/classes/PSCache.php');
 require_once(dirname(__FILE__).'/classes/ApiClient.php');
 
 class Pixelcrush extends Module
 {
     public $config;
-    public $domains;
 
     /* @var \pixelcrush\ApiClient*/
     public $client;
+
+    /* @var \pixelcrush\PSCache*/
+    public $cache;
 
     public $user_cloud;
     public $cloud_filters_hash;
@@ -45,13 +48,15 @@ class Pixelcrush extends Module
     {
         $this->name           = 'pixelcrush';
         $this->tab            = 'administration';
-        $this->version        = '1.2.1';
+        $this->version        = '1.3.0';
         $this->author         = 'pixelcrush.io';
         $this->bootstrap      = true;
         $this->need_instance  = 1;
         $this->module_key     = 'f06ff8e65629b4d85e63752cfbf1d457';
         $this->displayName    = $this->l('Pixelcrush CDN');
         $this->description    = $this->l('Make your shop extremely faster and forget managing images.');
+        $this->client         = $this->getClient();
+        $this->cache          = new \pixelcrush\PSCache();
 
         $this->ps_versions_compliancy = array('min' => '1.7', 'max' => '1.7.9.9');
 
@@ -106,9 +111,7 @@ class Pixelcrush extends Module
                Configuration::deleteByName('PIXELCRUSH_API_SECRET') &&
                Configuration::deleteByName('PIXELCRUSH_FILTERS_PREFIX') &&
                Configuration::deleteByName('PIXELCRUSH_FILL_BACKGROUND') &&
-               Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL') &&
-               Configuration::deleteByName('PIXELCRUSH_USER_CLOUD') &&
-               Configuration::deleteByName('PIXELCRUSH_API_CLOUD_TTL');
+               Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL');
     }
 
     public function getContent()
@@ -134,18 +137,23 @@ class Pixelcrush extends Module
                 $this->config      = null;
                 $this->_errors     = array();
                 $this->user_cloud  = null;
+                $error             = false;
 
                 $this->setConfig($submit);
 
                 // Submit/Reset Existing Filters
-                if ($this->resetCdnFilters((bool)Tools::getValue('reset_filters_checked')) !== true) {
-                    // Functionality cant be activated without user validation. Revert back this settings
-                    if (strpos($this->_errors[0], 'ApiClient') !== false) {
-                        Configuration::updateValue('PIXELCRUSH_ENABLE_IMAGES', false);
-                        Configuration::updateValue('PIXELCRUSH_ENABLE_STATICS', false);
-                    }
-
+                if (!$this->resetCdnFilters((bool)Tools::getValue('reset_filters_checked'))) {
+                    $error   = true;
                     $output .= $this->displayError($this->_errors);
+                } elseif (!$this->client->domainExists($this->client->domain())) {
+                    $error   = true;
+                    $output .= $this->displayError('The user-id domain cannot be found, please check the value');
+                }
+
+                // If some error was detected, we disable the system, just in case
+                if ($error) {
+                    Configuration::updateValue('PIXELCRUSH_ENABLE_IMAGES', false);
+                    Configuration::updateValue('PIXELCRUSH_ENABLE_STATICS', false);
                 }
 
                 $output .= $this->displayConfirmation($this->l('Settings updated'));
@@ -226,7 +234,7 @@ class Pixelcrush extends Module
                 ),
                 array(
                     'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
-                    'label'    => $this->l('Enable Static CDN (.js / .css files)'),
+                    'label'    => $this->l('Enable Static CDN (.js / .css / fonts files)'),
                     'name'     => 'PIXELCRUSH_ENABLE_STATICS',
                     'required' => true,
                     'is_bool'  => true,
@@ -242,11 +250,7 @@ class Pixelcrush extends Module
                             'label' => $this->l('No')
                         )
                     ),
-                    'lang' => false,
-                    'desc' => 'If you activate this option and your template is using webfonts (like Google Fonts), '.
-                        'you need to configure your webserver to allow CrossOrigin fonts.<br/>'.
-                        'We explain how to do it <a target="_blank" href="https://docs.pixelcrush.io/#webfonts"
-                        title="Webfont config">in our docs</a>.',
+                    'lang' => false
                 ),
                 array(
                     'type'     => 'text',
@@ -392,23 +396,22 @@ class Pixelcrush extends Module
      */
     public function loadImagesTypeHashes()
     {
-        if (!is_array($this->images_types_hash)) {
-            $this->images_types_hash = array();
+        $this->images_types_hash = array();
 
-            foreach (array('products', 'categories', 'manufacturers', 'suppliers') as $type) {
-                $type_hash = array();
+        foreach (array('products', 'categories', 'manufacturers', 'suppliers') as $type) {
+            $type_hash = array();
 
-                foreach (ImageType::getImagesTypes($type) as $image_type) {
-                    $type_hash[ $image_type['name'] ] = $image_type;
-                }
-
-                $this->images_types_hash[ $type ] = $type_hash;
+            foreach (ImageType::getImagesTypes($type) as $image_type) {
+                $type_hash[ $image_type['name'] ] = $image_type;
             }
+
+            $this->images_types_hash[ $type ] = $type_hash;
         }
     }
 
     public function loadCloudFiltersHash(array $cloud_cdn_filters)
     {
+        $this->cloud_filters_hash = array();
         foreach ($cloud_cdn_filters as $filter) {
             $this->cloud_filters_hash[ $filter->name ] = $filter;
         }
@@ -438,7 +441,9 @@ class Pixelcrush extends Module
      */
     public function imageTypesAsFilters()
     {
-        $this->loadImagesTypeHashes();
+        if ($this->images_types_hash === null) {
+            $this->loadImagesTypeHashes();
+        }
 
         $filters = array();
 
@@ -460,6 +465,51 @@ class Pixelcrush extends Module
     }
 
     /**
+     * @return mixed|null
+     */
+    public function getUserCloud()
+    {
+        // if already loaded in this pageview
+        if ($this->user_cloud !== null) {
+            return $this->user_cloud;
+        }
+
+        // is cached by our class
+        $this->user_cloud = $this->cache->get('PIXELCRUSH_USER_CLOUD');
+        if ($this->user_cloud !== null) {
+            return $this->user_cloud;
+        }
+
+        // else, get it from API
+        try {
+            if ($this->apiIsCallable()) {
+                // Cached results not valid anymore, we need to get them from user cloud and cache them again
+                $this->user_cloud = $this->client->userCloud();
+                $this->cache->set('PIXELCRUSH_USER_CLOUD', $this->user_cloud, 24*3600);
+                return $this->user_cloud;
+            }
+        } catch (Exception $e) {
+            $this->logError($e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * @param $msg
+     */
+    private function logError($msg)
+    {
+        if (_PS_MODE_DEV_) {
+            \Tools::error_log($msg);
+        } elseif (version_compare(_PS_VERSION_, '1.6.0', '>=')) {
+            \PrestaShopLogger::addLog($msg);
+        } else {
+            \Logger::addLog($msg);
+        }
+    }
+
+    /**
      * @param $url
      * @param $entity
      * @param $type
@@ -470,42 +520,31 @@ class Pixelcrush extends Module
     {
         $params           = array();
         $filter           = null;
-        $this->user_cloud = unserialize(Configuration::get('PIXELCRUSH_USER_CLOUD'));
+        $user_cloud       = $this->getUserCloud();
 
-        // Check if we already have session-cached data
-        if (!is_array($this->cloud_filters_hash) || empty($this->user_cloud)) {
-            try {
-                if ($this->apiIsCallable(false)) {
-                    // Cached results not valid anymore, we need to get them from user cloud and cache them again
-                    $this->user_cloud = $this->client->userCloud();
-                    Configuration::updateValue('PIXELCRUSH_USER_CLOUD', serialize($this->user_cloud));
-                }
-            } catch (Exception $e) {
-                $this->delayApiTtl();
-            }
-        }
-
-        if (!empty($this->user_cloud)) {
+        if ($user_cloud !== null && $this->cloud_filters_hash === null) {
             $this->loadCloudFiltersHash($this->user_cloud->cdn->filters);
-
-            // Using cloud filters if available
-            if (isset($this->cloud_filters_hash[$this->psFilterMap($entity, $type)])) {
-                $filter = $this->cloud_filters_hash[$this->psFilterMap($entity, $type)];
-            }
         }
 
-        // Ensure we have backup local image types just in case all/any cloud filter fails (saved statically)
-        $this->loadImagesTypeHashes();
+        // Using cloud filters if available
+        if (isset($this->cloud_filters_hash[$this->psFilterMap($entity, $type)])) {
+            $filter = $this->cloud_filters_hash[$this->psFilterMap($entity, $type)];
+        }
+
+        // Ensure we have backup local image types just in case all/any cloud filter fails
+        if ($this->images_types_hash === null) {
+            $this->loadImagesTypeHashes();
+        }
 
         // Using hashed local image types if cloud is not available or has invalid value
-        if (empty($filter) && !empty($entity) && !empty($type)) {
+        if ($filter === null && !empty($entity) && !empty($type)) {
             $image_type  = $this->images_types_hash[$entity][$type];
             $params['f'] = $this->rezFilter($image_type['width'], $image_type['height']);
         }
 
         // Ensure clients exists and build the url with the available data (cloud filter name or local resizing values)
         if ($this->client !== null) {
-            return $this->client->imgProxiedUrl($url, $params, $filter, $this->domains, $this->config->url_protocol);
+            return $this->client->imgProxiedUrl($url, $params, $filter, $this->config->url_protocol);
         }
 
         return $url;
@@ -546,7 +585,6 @@ class Pixelcrush extends Module
             'api_secret_key'  => Configuration::get('PIXELCRUSH_API_SECRET'),
             'rz_bg'           => Configuration::get('PIXELCRUSH_FILL_BACKGROUND'),
             'filters_prefix'  => Configuration::get('PIXELCRUSH_FILTERS_PREFIX'),
-            'api_cloud_ttl'   => Configuration::get('PIXELCRUSH_API_CLOUD_TTL'),
             'url_protocol'    => Configuration::get('PIXELCRUSH_URL_PROTOCOL'),
         );
 
@@ -585,7 +623,7 @@ class Pixelcrush extends Module
     {
         if (isset($params['object'])) {
             if ($params['object'] instanceof ImageType) {
-                if ($this->resetCdnFilters(false) !== true) {
+                if (!$this->resetCdnFilters(false)) {
                     // Show (probably auth) error on admin image size form
                     $this->context->controller->errors = $this->getErrors();
                 }
@@ -593,15 +631,19 @@ class Pixelcrush extends Module
         }
     }
 
+    /**
+     * @param bool $reset_existing
+     * @return bool
+     */
     public function resetCdnFilters($reset_existing = true)
     {
-        if ($this->apiIsCallable()) {
+        if ($this->apiIsCallable(false)) {
             try {
                 // Ignore cached cloud, we need current account data to process
-                if ($reset_existing) {
-                    $this->user_cloud = $this->client->userCloud();
+                $user_cloud = $this->client->userCloud();
 
-                    foreach ($this->user_cloud->cdn->filters as $filter) {
+                if ($reset_existing) {
+                    foreach ($user_cloud->cdn->filters as $filter) {
                         if (!empty($filter->name)) {
                             $this->client->userCdnFilterDelete($filter->name);
                         }
@@ -614,8 +656,8 @@ class Pixelcrush extends Module
                 }
 
                 // User cloud has new data: update cache. TTL has already been updated by apiIsCallable()
-                $this->user_cloud = $this->client->userCloud();
-                Configuration::updateValue('PIXELCRUSH_USER_CLOUD', serialize($this->user_cloud));
+                $this->user_cloud = $user_cloud;
+                $this->cache->set('PIXELCRUSH_USER_CLOUD', $this->user_cloud, 24*3600);
 
                 return true;
             } catch (Exception $e) {
@@ -626,26 +668,43 @@ class Pixelcrush extends Module
         return false;
     }
 
-    public function apiIsCallable($check_auth = true)
+    public function apiIsCallable($use_cache = true)
     {
-        $is_callable = false;
+        $client      = $this->getClient();
+        if (!$client) {
+            return false;
+        }
 
-        if ($this->getClient()) {
-            // Cached cloud still valid for non-auth operations
-            if ($check_auth === true || $this->config->api_cloud_ttl < date('Y-m-d H:i:s')) {
-                try {
-                    // Get client auth
-                    if ($this->client->auth_valid === true || $this->client->userAuth()) {
-                        $is_callable = true;
-                    }
-                } catch (Exception $e) {
-                    $this->_errors[] = $e->getMessage();
-                }
+        // being PHP 5.3 compatible is hard, we need to trick anonymous functions to be able to use $this vars.
+        $errors_array = $this->_errors;
+        $auth_api     = function () use ($client, &$errors_array) {
+            $ok = false;
+            try {
+                // Get client auth
+                $ok = $client->userAuth();
+            } catch (Exception $e) {
+                $errors_array[] = $e->getMessage();
             }
 
-            // Next Api check after some time
-            $this->delayApiTtl('+1 day');
+            return $ok;
+        };
+
+        $cached_value = null;
+        if ($use_cache) {
+            $cached_value = $this->cache->get('PIXELCRUSH_API_CHECK_VALID');
         }
+
+        $is_callable = $cached_value !== null ? (bool)$cached_value : $auth_api();
+
+        if ($is_callable) {
+            $value = '1';
+            $ttl   = 24*3600;
+        } else {
+            $value = '0';
+            $ttl   = 300;
+        }
+
+        $this->cache->set('PIXELCRUSH_API_CHECK_VALID', $value, $ttl);
 
         return $is_callable;
     }
@@ -662,14 +721,6 @@ class Pixelcrush extends Module
             }
         }
 
-        return $this->client !== null;
-    }
-
-    public function delayApiTtl($time = '+5 minutes')
-    {
-        $new_ttl                     = date('Y-m-d H:i:s', strtotime($time));
-        $this->config->api_cloud_ttl = $new_ttl;
-
-        Configuration::updateValue('PIXELCRUSH_API_CLOUD_TTL', $new_ttl);
+        return $this->client;
     }
 }

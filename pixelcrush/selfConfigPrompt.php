@@ -39,7 +39,7 @@ class SelfConfigPrompt extends stdClass
         'api_secret'      => '',
         'enable_images'   => '0',
         'enable_statics'  => '0',
-        'filters_prefix'  => 'ps_',
+        'filters_prefix'  => 'ps',
         'fill_background' => '#FFFFFF',
         'url_protocol'    => ''
     );

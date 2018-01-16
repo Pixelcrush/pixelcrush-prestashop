@@ -4,15 +4,24 @@ services:
   db:
     image: mysql:${MYSQL_VERSION}
     restart: always
+    ports:
+      - 3307:3306
     environment:
       MYSQL_ROOT_PASSWORD: admin
     volumes:
       - db_data:/var/lib/mysql
 
+  memcached:
+    image: memcached:1.5
+    restart: always
+    ports:
+      - 11211:11211
+
   prestashop:
     build: .
     tmpfs:
     - /tmp/cache
+    - /tmp/cache-1.7
     environment:
       XDEBUG: 1
       XDEBUG_HOST: ${XDEBUG_HOST}
@@ -37,6 +46,7 @@ services:
       - 443:443
     depends_on:
       - db
+      - memcached
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin

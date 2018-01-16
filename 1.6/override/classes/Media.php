@@ -79,7 +79,7 @@ class Media extends MediaCore
         if ($need_rtl && Context::getContext()->language->is_rtl) {
             $css_uri_rtl = preg_replace('/(^[^.].*)(\.css)$/', '$1_rtl.css', $css_uri);
             $rtl_media = self::getMediaPath($css_uri_rtl, $css_media_type);
-            if ($rtl_media != false) {
+            if ($rtl_media !== false) {
                 return $rtl_media;
             }
         }

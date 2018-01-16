@@ -107,5 +107,14 @@ docker-compose down -v --remove-orphans
 # Starts compose in foreground recreating, and building, the containers
 docker-compose up --force-recreate --build
 
+# Backup, just in case you shoot yourself in the foot
+backup_dir="${script_dir}/${OUT_DEBUG_FOLDER}/backup"
+echo "Backing up to ${backup_dir}"
+mkdir -p "${backup_dir}"
+cp -r "${script_dir}/${OUT_DEBUG_FOLDER}/root/modules/pixelcrush" "${backup_dir}"
+cp "${script_dir}/${OUT_DEBUG_FOLDER}/root/override/classes/Link.php" "${backup_dir}"
+cp "${script_dir}/${OUT_DEBUG_FOLDER}/root/override/classes/Media.php" "${backup_dir}"
+
+
 # Go back to previous working dir.
 cd ${cur_dir}
