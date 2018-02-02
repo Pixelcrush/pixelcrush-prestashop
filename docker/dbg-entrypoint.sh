@@ -19,7 +19,7 @@ done
 set -e
 
 # If database doesn't exists yet, create it here.
-if ! mysqlshow -h $DB_SERVER -P $DB_PORT -u $DB_USER -p$DB_PASSWD | grep -q prestashop; then
+if ! mysqlshow -h $DB_SERVER -P $DB_PORT -u $DB_USER -p$DB_PASSWD | grep -q $DB_NAME; then
     mysqladmin -h $DB_SERVER -P $DB_PORT -u $DB_USER -p$DB_PASSWD create $DB_NAME --force 2> /dev/null;
 fi
 
