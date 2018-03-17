@@ -111,7 +111,9 @@ class Pixelcrush extends Module
                Configuration::deleteByName('PIXELCRUSH_API_SECRET') &&
                Configuration::deleteByName('PIXELCRUSH_FILTERS_PREFIX') &&
                Configuration::deleteByName('PIXELCRUSH_FILL_BACKGROUND') &&
-               Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL');
+               Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL') &&
+               Configuration::deleteByName('PIXELCRUSH_URL_DOMAIN') &&
+               Configuration::deleteByName('PIXELCRUSH_URL_FOLDER');
     }
 
     public function getContent()
@@ -128,7 +130,12 @@ class Pixelcrush extends Module
                 'api_secret'      => Tools::getValue('PIXELCRUSH_API_SECRET'),
                 'filters_prefix'  => Tools::getValue('PIXELCRUSH_FILTERS_PREFIX'),
                 'fill_background' => Tools::getValue('PIXELCRUSH_FILL_BACKGROUND'),
-                'url_protocol'    => Tools::getValue('PIXELCRUSH_URL_PROTOCOL')
+                'url_protocol'    => Tools::getValue('PIXELCRUSH_URL_PROTOCOL'),
+                'domain'          => Tools::getValue('PIXELCRUSH_DOMAIN'),
+                'folder'          => (object)array(
+                    'name' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[0],
+                    'url' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[1]
+                ),
             );
 
             if ($this->validateConfig($submit)) {
@@ -174,6 +181,8 @@ class Pixelcrush extends Module
         Configuration::updateValue('PIXELCRUSH_FILTERS_PREFIX', $config->filters_prefix);
         Configuration::updateValue('PIXELCRUSH_FILL_BACKGROUND', $config->fill_background);
         Configuration::updateValue('PIXELCRUSH_URL_PROTOCOL', $config->url_protocol);
+        Configuration::updateValue('PIXELCRUSH_DOMAIN', $config->domain);
+        Configuration::updateValue('PIXELCRUSH_FOLDER', $config->folder->name.'|'.$config->folder->url);
     }
 
     public function validateConfig($config)
@@ -205,6 +214,21 @@ class Pixelcrush extends Module
     public function displayForm()
     {
         $fields_form = array();
+        $domains = array_map(function($domain) {
+            $domain = ($domain->ssl === 'enabled' ? 'https://' : 'http://') . $domain->name;
+            return array(
+                'id_option' => $domain,
+                'name' => $domain,
+            );
+        }, $this->getUserCloud()->cdn->domains);
+
+        $folders = array_map(function($folder) {
+            return array(
+                'id_option' => $folder->name.'|'.$folder->url,
+                'name' => $folder->name.' --> '.$folder->url
+            );
+        }, $this->getUserCloud()->cdn->folders);
+
 
         // Init Fields form array
         $fields_form[0]['form'] = array(
@@ -299,6 +323,30 @@ class Pixelcrush extends Module
                 ),
                 array(
                     'type'  => 'select',
+                    'label' => $this->l('Available Domains:'),
+                    'desc'  => $this->l('Select which domain to use from those validated on your account.'),
+                    'name'     => 'PIXELCRUSH_DOMAIN',
+                    'required' => true,
+                    'options'  => array(
+                        'id'     => 'id_option',
+                        'name'   => 'name',
+                        'query'  => $domains,
+                    ),
+                ),
+                array(
+                    'type'  => 'select',
+                    'label' => $this->l('Use Virtual Folder:'),
+                    'desc'  => $this->l('Selected shortening alias for your base image URL.'),
+                    'name'     => 'PIXELCRUSH_FOLDER',
+                    'required' => true,
+                    'options'  => array(
+                        'id'     => 'id_option',
+                        'name'   => 'name',
+                        'query'  => $folders,
+                    ),
+                ),
+                array(
+                    'type'  => 'select',
                     'label' => $this->l('Add protocol to proxied url:'),
                     'desc'  => $this->l('Adds protocol to original resource url. If this is not set pixelcrush will
                                         access the resources using always http.'),
@@ -387,6 +435,8 @@ class Pixelcrush extends Module
         $helper->fields_value['PIXELCRUSH_FILTERS_PREFIX']   = Configuration::get('PIXELCRUSH_FILTERS_PREFIX');
         $helper->fields_value['PIXELCRUSH_FILL_BACKGROUND']  = Configuration::get('PIXELCRUSH_FILL_BACKGROUND');
         $helper->fields_value['PIXELCRUSH_URL_PROTOCOL']     = Configuration::get('PIXELCRUSH_URL_PROTOCOL');
+        $helper->fields_value['PIXELCRUSH_DOMAIN']           = Configuration::get('PIXELCRUSH_DOMAIN');
+        $helper->fields_value['PIXELCRUSH_FOLDER']           = Configuration::get('PIXELCRUSH_FOLDER');
 
         return $helper->generateForm($fields_form);
     }
@@ -544,7 +594,7 @@ class Pixelcrush extends Module
 
         // Ensure clients exists and build the url with the available data (cloud filter name or local resizing values)
         if ($this->client !== null) {
-            return $this->client->imgProxiedUrl($url, $params, $filter, $this->config->url_protocol);
+            return $this->client->imgProxiedUrl($url, $params, $filter, $this->config);
         }
 
         return $url;
@@ -586,6 +636,11 @@ class Pixelcrush extends Module
             'rz_bg'           => Configuration::get('PIXELCRUSH_FILL_BACKGROUND'),
             'filters_prefix'  => Configuration::get('PIXELCRUSH_FILTERS_PREFIX'),
             'url_protocol'    => Configuration::get('PIXELCRUSH_URL_PROTOCOL'),
+            'domain'          => Configuration::get('PIXELCRUSH_DOMAIN'),
+            'folder'          => (object)array(
+                                    'name' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[0],
+                                    'url' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[1]
+            ),
         );
 
         return !empty($this->config->id) && !empty($this->config->api_secret_key);
