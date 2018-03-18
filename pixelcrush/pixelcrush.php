@@ -136,6 +136,7 @@ class Pixelcrush extends Module
                     'name' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[0],
                     'url' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[1]
                 ),
+                'no_thumbnails'   => Tools::getValue('PIXELCRUSH_NO_THUMBNAILS_checked', 0),
             );
 
             if ($this->validateConfig($submit)) {
@@ -145,6 +146,14 @@ class Pixelcrush extends Module
                 $this->_errors     = array();
                 $this->user_cloud  = null;
                 $error             = false;
+                $ajax_thumb_action = null;
+
+                if ($submit->enable_images && $submit->no_thumbnails && !Configuration::get('PIXELCRUSH_NO_THUMBNAILS')
+                ) {
+                    $ajax_thumb_action = 'delete';
+                } else if ($submit->no_thumbnails === 0 && (int)Configuration::get('PIXELCRUSH_NO_THUMBNAILS') === 1) {
+                    $ajax_thumb_action = 'regenerate';
+                }
 
                 $this->setConfig($submit);
 
@@ -161,6 +170,11 @@ class Pixelcrush extends Module
                 if ($error) {
                     Configuration::updateValue('PIXELCRUSH_ENABLE_IMAGES', false);
                     Configuration::updateValue('PIXELCRUSH_ENABLE_STATICS', false);
+                } elseif ($ajax_thumb_action) {
+                    $action_result = $this->_regenerateThumbnails('all', $ajax_thumb_action === 'delete' ? true : false);
+                    if ($action_result) {
+                        error_log("hola");
+                    }
                 }
 
                 $output .= $this->displayConfirmation($this->l('Settings updated'));
@@ -183,6 +197,7 @@ class Pixelcrush extends Module
         Configuration::updateValue('PIXELCRUSH_URL_PROTOCOL', $config->url_protocol);
         Configuration::updateValue('PIXELCRUSH_DOMAIN', $config->domain);
         Configuration::updateValue('PIXELCRUSH_FOLDER', $config->folder->name.'|'.$config->folder->url);
+        Configuration::updateValue('PIXELCRUSH_NO_THUMBNAILS', $config->no_thumbnails);
     }
 
     public function validateConfig($config)
@@ -211,6 +226,9 @@ class Pixelcrush extends Module
         return $is_valid;
     }
 
+    /**
+     * @return mixed
+     */
     public function displayForm()
     {
         $fields_form = array();
@@ -228,7 +246,12 @@ class Pixelcrush extends Module
                 'name' => $folder->name.' --> '.$folder->url
             );
         }, $this->getUserCloud()->cdn->folders);
-
+        if (count($folders)) {
+            array_unshift($folders, array(
+                'id_option' => '',
+                'name' => 'None'
+            ));
+        }
 
         // Init Fields form array
         $fields_form[0]['form'] = array(
@@ -255,6 +278,24 @@ class Pixelcrush extends Module
                         )
                     ),
                     'lang' => false,
+                ),
+                array(
+                    'type'    => 'checkbox',
+                    'label'   => $this->l('Disable and delete Thumbnail Files'),
+                    'desc'    => $this->l('When using proxied images, all thumbnails will be deleted from your server
+                                           and delivered via Pixelcrush.'),
+                    'name'   => 'PIXELCRUSH_NO_THUMBNAILS',
+                    'values' => array(
+                        'query' => array(
+                            array(
+                                'id'   => 'checked',
+                                'name' => '',
+                                'val'  => '1'
+                            ),
+                        ),
+                        'id'   => 'id',
+                        'name' => 'name'
+                    )
                 ),
                 array(
                     'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
@@ -387,6 +428,11 @@ class Pixelcrush extends Module
             )
         );
 
+        if (!Configuration::get('PIXELCRUSH_ENABLE_IMAGES')) {
+            $inputs = $fields_form[0]['form']['input'];
+            $fields_form[0]['form']['input'] = array_splice($inputs, 0, 1) + $inputs;
+        }
+
         // Adds logo on top of the configuration form for PS 1.6+
         if (version_compare(_PS_VERSION_, '1.6.0', '>=')) {
             $img = array(
@@ -437,6 +483,7 @@ class Pixelcrush extends Module
         $helper->fields_value['PIXELCRUSH_URL_PROTOCOL']     = Configuration::get('PIXELCRUSH_URL_PROTOCOL');
         $helper->fields_value['PIXELCRUSH_DOMAIN']           = Configuration::get('PIXELCRUSH_DOMAIN');
         $helper->fields_value['PIXELCRUSH_FOLDER']           = Configuration::get('PIXELCRUSH_FOLDER');
+        $helper->fields_value['PIXELCRUSH_NO_THUMBNAILS_checked']    = Configuration::get('PIXELCRUSH_NO_THUMBNAILS');
 
         return $helper->generateForm($fields_form);
     }
@@ -639,8 +686,9 @@ class Pixelcrush extends Module
             'domain'          => Configuration::get('PIXELCRUSH_DOMAIN'),
             'folder'          => (object)array(
                                     'name' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[0],
-                                    'url' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[1]
+                                    'url' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[1],
             ),
+            'no_thumbnails'   => Configuration::get('PIXELCRUSH_NO_THUMBNAILS', 0),
         );
 
         return !empty($this->config->id) && !empty($this->config->api_secret_key);
@@ -777,5 +825,240 @@ class Pixelcrush extends Module
         }
 
         return $this->client;
+    }
+
+    protected function _regenerateThumbnails($type = 'all', $deleteOldImages = false)
+    {
+        // TODO: Make $type -- $types so we can filter by some, not only one or all
+        $this->start_time = time();
+        ini_set('max_execution_time', $this->max_execution_time); // ini_set may be disabled, we need the real value
+        $this->max_execution_time = (int)ini_get('max_execution_time');
+        $languages = Language::getLanguages(false);
+
+        $process = array(
+            array('type' => 'categories', 'dir' => _PS_CAT_IMG_DIR_),
+            //array('type' => 'manufacturers', 'dir' => _PS_MANU_IMG_DIR_),
+            //array('type' => 'suppliers', 'dir' => _PS_SUPP_IMG_DIR_),
+            //array('type' => 'scenes', 'dir' => _PS_SCENE_IMG_DIR_),
+            array('type' => 'products', 'dir' => _PS_PROD_IMG_DIR_),
+            //array('type' => 'stores', 'dir' => _PS_STORE_IMG_DIR_)
+        );
+
+        // Launching generation process
+        foreach ($process as $proc) {
+            if ($type != 'all' && $type != $proc['type']) {
+                continue;
+            }
+
+            // Getting format generation
+            $formats = ImageType::getImagesTypes($proc['type']);
+            if ($type != 'all') {
+                $format = strval(Tools::getValue('format_'.$type));
+                if ($format != 'all') {
+                    foreach ($formats as $k => $form) {
+                        if ($form['id_image_type'] != $format) {
+                            unset($formats[$k]);
+                        }
+                    }
+                }
+            }
+
+            if ($deleteOldImages) {
+                $this->_deleteOldImages($proc['dir'], $formats, ($proc['type'] == 'products' ? true : false));
+            }
+            if (($return = $this->_regenerateNewImages($proc['dir'], $formats, ($proc['type'] == 'products' ? true : false))) === true) {
+                if (!count($this->_errors)) {
+                    $this->_errors[] = sprintf(Tools::displayError('Cannot write images for this type: %s. Please check the %s folder\'s writing permissions.'), $proc['type'], $proc['dir']);
+                }
+            } elseif ($return == 'timeout') {
+                $this->_errors[] = Tools::displayError('Only part of the images have been regenerated. The server timed out before finishing.');
+            } else {
+                if ($proc['type'] == 'products') {
+                    if ($this->_regenerateWatermark($proc['dir'], $formats) == 'timeout') {
+                        $this->_errors[] = Tools::displayError('Server timed out. The watermark may not have been applied to all images.');
+                    }
+                }
+                /*
+                if (!count($this->_errors)) {
+                    if ($this->_regenerateNoPictureImages($proc['dir'], $formats, $languages)) {
+                        $this->_errors[] = sprintf(Tools::displayError('Cannot write "No picture" image to (%s) images folder. Please check the folder\'s writing permissions.'), $proc['type']);
+                    }
+                }
+                */
+            }
+        }
+        return (count($this->_errors) > 0 ? false : true);
+    }
+
+    protected function _deleteOldImages($dir, $type, $product = false)
+    {
+        if (!is_dir($dir)) {
+            return false;
+        }
+        $toDel = scandir($dir);
+
+        foreach ($toDel as $d) {
+            foreach ($type as $imageType) {
+                if (preg_match('/^[0-9]+\-'.($product ? '[0-9]+\-' : '').$imageType['name'].'\.jpg$/', $d)
+                    || (count($type) > 1 && preg_match('/^[0-9]+\-[_a-zA-Z0-9-]*\.jpg$/', $d))
+                    || preg_match('/^([[:lower:]]{2})\-default\-'.$imageType['name'].'\.jpg$/', $d)) {
+                    if (file_exists($dir.$d)) {
+                        unlink($dir.$d);
+                    }
+                }
+            }
+        }
+
+        // delete product images using new filesystem.
+        if ($product) {
+            $productsImages = Image::getAllImages();
+            foreach ($productsImages as $image) {
+                $imageObj = new Image($image['id_image']);
+                $imageObj->id_product = $image['id_product'];
+                if (file_exists($dir.$imageObj->getImgFolder())) {
+                    $toDel = scandir($dir.$imageObj->getImgFolder());
+                    foreach ($toDel as $d) {
+                        foreach ($type as $imageType) {
+                            if (preg_match('/^[0-9]+\-'.$imageType['name'].'\.jpg$/', $d) || (count($type) > 1 && preg_match('/^[0-9]+\-[_a-zA-Z0-9-]*\.jpg$/', $d))) {
+                                if (file_exists($dir.$imageObj->getImgFolder().$d)) {
+                                    unlink($dir.$imageObj->getImgFolder().$d);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /* Hook watermark optimization */
+    protected function _regenerateWatermark($dir, $type = null)
+    {
+        $result = Db::getInstance()->executeS('
+        SELECT m.`name` FROM `'._DB_PREFIX_.'module` m
+        LEFT JOIN `'._DB_PREFIX_.'hook_module` hm ON hm.`id_module` = m.`id_module`
+        LEFT JOIN `'._DB_PREFIX_.'hook` h ON hm.`id_hook` = h.`id_hook`
+        WHERE h.`name` = \'actionWatermark\' AND m.`active` = 1');
+
+        if ($result && count($result)) {
+            $productsImages = Image::getAllImages();
+            foreach ($productsImages as $image) {
+                $imageObj = new Image($image['id_image']);
+                if (file_exists($dir.$imageObj->getExistingImgPath().'.jpg')) {
+                    foreach ($result as $module) {
+                        $moduleInstance = Module::getInstanceByName($module['name']);
+                        if ($moduleInstance && is_callable(array($moduleInstance, 'hookActionWatermark'))) {
+                            call_user_func(array($moduleInstance, 'hookActionWatermark'), array('id_image' => $imageObj->id, 'id_product' => $imageObj->id_product, 'image_type' => $type));
+                        }
+
+                        if (time() - $this->start_time > $this->max_execution_time - 4) { // stop 4 seconds before the tiemout, just enough time to process the end of the page on a slow server
+                            return 'timeout';
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    protected function _regenerateNoPictureImages($dir, $type, $languages)
+    {
+        $errors = false;
+        $generate_hight_dpi_images = (bool)Configuration::get('PS_HIGHT_DPI');
+
+        foreach ($type as $image_type) {
+            foreach ($languages as $language) {
+                $file = $dir.$language['iso_code'].'.jpg';
+                if (!file_exists($file)) {
+                    $file = _PS_PROD_IMG_DIR_.Language::getIsoById((int)Configuration::get('PS_LANG_DEFAULT')).'.jpg';
+                }
+                if (!file_exists($dir.$language['iso_code'].'-default-'.stripslashes($image_type['name']).'.jpg')) {
+                    if (!ImageManager::resize($file, $dir.$language['iso_code'].'-default-'.stripslashes($image_type['name']).'.jpg', (int)$image_type['width'], (int)$image_type['height'])) {
+                        $errors = true;
+                    }
+
+                    if ($generate_hight_dpi_images) {
+                        if (!ImageManager::resize($file, $dir.$language['iso_code'].'-default-'.stripslashes($image_type['name']).'2x.jpg', (int)$image_type['width']*2, (int)$image_type['height']*2)) {
+                            $errors = true;
+                        }
+                    }
+                }
+            }
+        }
+        return $errors;
+    }
+
+    protected function _regenerateNewImages($dir, $type, $productsImages = false)
+    {
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        $generate_hight_dpi_images = (bool)Configuration::get('PS_HIGHT_DPI');
+
+        if (!$productsImages) {
+            $formated_thumb_scene = ImageType::getFormatedName('thumb_scene');
+            $formated_medium = ImageType::getFormatedName('medium');
+            foreach (scandir($dir) as $image) {
+                if (preg_match('/^[0-9]*\.jpg$/', $image)) {
+                    foreach ($type as $k => $imageType) {
+                        // Customizable writing dir
+                        $newDir = $dir;
+                        if ($imageType['name'] == $formated_thumb_scene) {
+                            $newDir .= 'thumbs/';
+                        }
+                        if (!file_exists($newDir)) {
+                            continue;
+                        }
+
+                        if (($dir == _PS_CAT_IMG_DIR_) && ($imageType['name'] == $formated_medium) && is_file(_PS_CAT_IMG_DIR_.str_replace('.', '_thumb.', $image))) {
+                            $image = str_replace('.', '_thumb.', $image);
+                        }
+
+                        if (!file_exists($newDir.substr($image, 0, -4).'-'.stripslashes($imageType['name']).'.jpg')) {
+                            if (!file_exists($dir.$image) || !filesize($dir.$image)) {
+                                $this->_errors[] = sprintf(Tools::displayError('Source file does not exist or is empty (%s)'), $dir.$image);
+                            } elseif (!ImageManager::resize($dir.$image, $newDir.substr(str_replace('_thumb.', '.', $image), 0, -4).'-'.stripslashes($imageType['name']).'.jpg', (int)$imageType['width'], (int)$imageType['height'])) {
+                                    $this->_errors[] = sprintf(Tools::displayError('Failed to resize image file (%s)'), $dir.$image);
+                            }
+
+                            if ($generate_hight_dpi_images) {
+                                if (!ImageManager::resize($dir.$image, $newDir.substr($image, 0, -4).'-'.stripslashes($imageType['name']).'2x.jpg', (int)$imageType['width']*2, (int)$imageType['height']*2)) {
+                                    $this->_errors[] = sprintf(Tools::displayError('Failed to resize image file to high resolution (%s)'), $dir.$image);
+                                }
+                            }
+                        }
+                        // stop 4 seconds before the timeout, just enough time to process the end of the page on a slow server
+                        //if (time() - $this->start_time > $this->max_execution_time - 4) {
+                        //    return 'timeout';
+                        //}
+                    }
+                }
+            }
+        } else {
+            foreach (Image::getAllImages() as $image) {
+                $imageObj = new Image($image['id_image']);
+                $existing_img = $dir.$imageObj->getExistingImgPath().'.jpg';
+                if (file_exists($existing_img) && filesize($existing_img)) {
+                    foreach ($type as $imageType) {
+                        if (!ImageManager::resize($existing_img, $dir.$imageObj->getExistingImgPath().'-'.stripslashes($imageType['name']).'.jpg', (int)$imageType['width'], (int)$imageType['height'])) {
+                            $this->_errors[] = sprintf(Tools::displayError('Original image is corrupt (%s) for product ID %2$d or bad permission on folder'), $existing_img, (int)$imageObj->id_product);
+                        }
+
+                        if ($generate_hight_dpi_images) {
+                            if (!ImageManager::resize($existing_img, $dir.$imageObj->getExistingImgPath().'-'.stripslashes($imageType['name']).'2x.jpg', (int)$imageType['width']*2, (int)$imageType['height']*2)) {
+                                $this->_errors[] = sprintf(Tools::displayError('Original image is corrupt (%s) for product ID %2$d or bad permission on folder'), $existing_img, (int)$imageObj->id_product);
+                            }
+                        }
+                    }
+                } else {
+                    $this->_errors[] = sprintf(Tools::displayError('Original image is missing or empty (%1$s) for product ID %2$d'), $existing_img, (int)$imageObj->id_product);
+                }
+                //if (time() - $this->start_time > $this->max_execution_time - 4) { // stop 4 seconds before the tiemout, just enough time to process the end of the page on a slow server
+                //    return 'timeout';
+                //}
+            }
+        }
+
+        return (bool)count($this->_errors);
     }
 }

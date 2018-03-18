@@ -97,7 +97,7 @@ class ApiClient
         $url        = $this->domain() . '/user/cloud';
         $response   = $this->rest($url, 'GET', null, $this->auth('GET', $url, null, time()));
         // TODO: Modify API to retrive folders too
-        // $response->result->cdn->folders = array((object)array('name' => 'ivnlns', 'url' => 'http://ivanlinos.ngrok.io'));
+        $response->result->cdn->folders = array((object)array('name' => 'ivnlns', 'url' => 'http://ivanlinos.ngrok.io'));
 
         return $response->result;
     }
@@ -142,11 +142,10 @@ class ApiClient
         $url = preg_replace('#^https?://#', '', $url);
 
         // Replace virtual folder (we need to remove the protocol as well to match the removed-protocolled url
+        // Virtual folder are incompatible with url_protocol option, so we need to chose one
         if ($config->folder) {
             $url = str_replace(preg_replace('#^https?://#', '', $config->folder->url), $config->folder->name, $url);
-        }
-
-        if (!empty($config->url_protocol)) {
+        } else if (!empty($config->url_protocol)) {
             $url = $config->url_protocol . $url;
         }
 
