@@ -174,7 +174,7 @@ class Pixelcrush extends Module
             if ($this->post_async($this->ajaxProcessLink(Tools::getValue('action')))) {
                 $output .= $this->adminDisplayInformation($this->l(
                     'Thumbnails sent to '.Tools::getValue('action').' in the background.
-                    Please check result in a few minutes'
+                    Please check result in a few minutes.'
                 ));
             }
         }
@@ -328,7 +328,20 @@ class Pixelcrush extends Module
         }
 
         $backlink = $this->context->link->getAdminLink('AdminModules').
-            '&configure=pixelcrush&token='.Tools::getAdminTokenLite('AdminModules').'&action=';
+            '&configure=pixelcrush&token='.Tools::getAdminTokenLite('AdminModules');
+
+        if (Configuration::get('PIXELCRUSH_ACTIVE_PROCESS')) {
+            $thumbnail_info = "<strong>".Configuration::get('PIXELCRUSH_ACTIVE_PROCESS')." is still running in the background.</strong><br/>
+                               Please wait until it is finished to perform any other thumbnail-related action.";
+        } elseif (($thumbs = $this->getProductsThumbsSize()) && $thumbs->size) {
+            $thumbnail_info = $thumbs->nb." Thumbnail files on the server. It is safe to delete them.
+                              (You will save ".$thumbs->size."Mb on disk)<br/>
+                              <a href='".$backlink."&action=remove'>Delete Thumbnails</a>";
+        } elseif (!$thumbs) {
+            $thumbnail_info = "Thumbnail files are deleted on the server.<br/>
+                                You should only regenerate them if you are going to turn Image CDN off or disable or uninstall the module.<br/>
+                               <a href='".$backlink."&action=regenerate'>Regenerate Thumbnails</a>";
+        }
 
         // Init Fields form array
         $fields_form[0]['form'] = array(
@@ -379,16 +392,7 @@ class Pixelcrush extends Module
                     'type'    => 'html',
                     'label'   => $this->l('Thumbnail Status'),
                     'name'    => 'PIXELCRUSH_THUMBNAILS_STATUS',
-                    'html_content' => (($thumbs = $this->getProductsThumbsSize()) && $thumbs->size)
-                            ? '<div class="alert alert-info col-lg-6">
-                                '.$thumbs->nb.' Thumbnail files on the server. It is safe to delete them.
-                                (You will save '.$thumbs->size.'Mb on disk) 
-                                <a href="'.$backlink.'delete">Delete Thumbnails</a>
-                               </div>'
-                            : '<div class="alert alert-info col-lg-6">
-                                No Thumbnail files on the server.
-                                <a href="'.$backlink.'regenerate">Regenerate Thumbnails</a>
-                               </div>'
+                    'html_content' => "<div class='alert alert-info col-lg-6'>$thumbnail_info</div>",
                 ),
                 array(
                     'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
@@ -919,6 +923,4 @@ class Pixelcrush extends Module
 
         return $this->client;
     }
-
-
 }

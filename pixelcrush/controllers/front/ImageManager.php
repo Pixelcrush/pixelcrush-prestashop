@@ -1,22 +1,42 @@
 <?php
 /**
-* Ajax Image Manager
-*/
+ * Pixelcrush CDN Prestashop Module
+ *
+ * Copyright 2017 Imagenii, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * @author   Pixelcrush
+ * @copyright Copyright (c) 2017 Imagenii Inc. All rights reserved
+ * @license http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2
+ *
+ */
 
 class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
 {
     public function initContent()
     {
-        if (!in_array(Tools::getValue('action'), ['delete', 'regenerate'])) {
+        if (!in_array(Tools::getValue('action'), ['remove', 'regenerate'])) {
             return;
         }
 
         parent::initContent();
 
         if (Tools::getValue('token') === Tools::encrypt('pixelcrush-imagemanager'.Tools::getValue('id_employee'))) {
-            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', '1');
-            $this->_regenerateThumbnails(Tools::getValue('type'), Tools::getValue('action') === 'delete');
-            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', '0');
+            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', Tools::getValue('action'));
+            if ($this->_regenerateThumbnails(Tools::getValue('type'), Tools::getValue('action') === 'remove')) {
+                Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', null);
+            }
         }
     }
 
@@ -47,7 +67,7 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
             // Getting format generation
             $formats = ImageType::getImagesTypes($proc['type']);
             if ($type !== 'all') {
-                $format = strval(Tools::getValue('format_'.$type));
+                $format = (string)(Tools::getValue('format_'.$type));
                 if ($format !== 'all') {
                     foreach ($formats as $k => $form) {
                         if ($form['id_image_type'] != $format) {
@@ -90,7 +110,7 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
         if (!is_dir($dir)) {
             return false;
         }
-        $toDel = scandir($dir);
+        $toDel = scandir($dir, 1);
 
         foreach ($toDel as $d) {
             foreach ($type as $imageType) {
@@ -111,7 +131,7 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
                 $imageObj = new Image($image['id_image']);
                 $imageObj->id_product = $image['id_product'];
                 if (file_exists($dir.$imageObj->getImgFolder())) {
-                    $toDel = scandir($dir.$imageObj->getImgFolder());
+                    $toDel = scandir($dir.$imageObj->getImgFolder(), 1);
                     foreach ($toDel as $d) {
                         foreach ($type as $imageType) {
                             if (preg_match('/^[0-9]+\-'.$imageType['name'].'\.jpg$/', $d) || (count($type) > 1 && preg_match('/^[0-9]+\-[_a-zA-Z0-9-]*\.jpg$/', $d))) {
@@ -194,7 +214,7 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
         if (!$productsImages) {
             $formated_thumb_scene = ImageType::getFormatedName('thumb_scene');
             $formated_medium = ImageType::getFormatedName('medium');
-            foreach (scandir($dir) as $image) {
+            foreach (scandir($dir, 1) as $image) {
                 if (preg_match('/^[0-9]*\.jpg$/', $image)) {
                     foreach ($type as $k => $imageType) {
                         // Customizable writing dir
@@ -314,7 +334,7 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
         // This allow for higher quality and for transparency. JPG source files will also benefit from a higher quality
         // because JPG reencoding by GD, even with max quality setting, degrades the image.
         if (Configuration::get('PS_IMAGE_QUALITY') == 'png_all'
-            || (Configuration::get('PS_IMAGE_QUALITY') == 'png' && $type == IMAGETYPE_PNG) && !$force_type) {
+            || ((Configuration::get('PS_IMAGE_QUALITY') === 'png' && $type === IMAGETYPE_PNG) && !$force_type)) {
             $file_type = 'png';
         }
 
