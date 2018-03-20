@@ -22,21 +22,21 @@
  *
  */
 
-class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
+class PixelcrushPxcImageManagerModuleFrontController extends ModuleFrontController
 {
     public function initContent()
     {
-        if (!in_array(Tools::getValue('action'), ['remove', 'regenerate'])) {
+        $process = Tools::getValue('process');
+        if (!$process || !in_array($process, ['remove', 'regenerate'])) {
             return;
         }
 
         parent::initContent();
 
         if (Tools::getValue('token') === Tools::encrypt('pixelcrush-imagemanager'.Tools::getValue('id_employee'))) {
-            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', Tools::getValue('action'));
-            if ($this->_regenerateThumbnails(Tools::getValue('type'), Tools::getValue('action') === 'remove')) {
-                Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', null);
-            }
+            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', $process);
+            $this->_regenerateThumbnails(Tools::getValue('type'), $process === 'remove');
+            Configuration::updateValue('PIXELCRUSH_ACTIVE_PROCESS', null);
         }
     }
 
@@ -79,26 +79,27 @@ class PixelcrushImageManagerModuleFrontController extends ModuleFrontController
 
             if ($deleteOldImages) {
                 $this->_deleteOldImages($proc['dir'], $formats, ($proc['type'] == 'products' ? true : false));
-            }
-            if (($return = $this->_regenerateNewImages($proc['dir'], $formats, ($proc['type'] == 'products' ? true : false))) === true) {
-                if (!count($this->errors)) {
-                    $this->errors[] = sprintf(Tools::displayError('Cannot write images for this type: %s. Please check the %s folder\'s writing permissions.'), $proc['type'], $proc['dir']);
-                }
-            } elseif ($return == 'timeout') {
-                $this->errors[] = Tools::displayError('Only part of the images have been regenerated. The server timed out before finishing.');
             } else {
-                if ($proc['type'] == 'products') {
-                    if ($this->_regenerateWatermark($proc['dir'], $formats) === 'timeout') {
-                        $this->errors[] = Tools::displayError('Server timed out. The watermark may not have been applied to all images.');
+                if (($return = $this->_regenerateNewImages($proc['dir'], $formats, ($proc['type'] == 'products' ? true : false))) === true) {
+                    if (!count($this->errors)) {
+                        $this->errors[] = sprintf(Tools::displayError('Cannot write images for this type: %s. Please check the %s folder\'s writing permissions.'), $proc['type'], $proc['dir']);
                     }
-                }
-                /*
-                if (!count($this->errors)) {
-                    if ($this->_regenerateNoPictureImages($proc['dir'], $formats, $languages)) {
-                        $this->errors[] = sprintf(Tools::displayError('Cannot write "No picture" image to (%s) images folder. Please check the folder\'s writing permissions.'), $proc['type']);
+                } elseif ($return == 'timeout') {
+                    $this->errors[] = Tools::displayError('Only part of the images have been regenerated. The server timed out before finishing.');
+                } else {
+                    if ($proc['type'] == 'products') {
+                        if ($this->_regenerateWatermark($proc['dir'], $formats) === 'timeout') {
+                            $this->errors[] = Tools::displayError('Server timed out. The watermark may not have been applied to all images.');
+                        }
                     }
+                    /*
+                    if (!count($this->errors)) {
+                        if ($this->_regenerateNoPictureImages($proc['dir'], $formats, $languages)) {
+                            $this->errors[] = sprintf(Tools::displayError('Cannot write "No picture" image to (%s) images folder. Please check the folder\'s writing permissions.'), $proc['type']);
+                        }
+                    }
+                    */
                 }
-                */
             }
         }
 

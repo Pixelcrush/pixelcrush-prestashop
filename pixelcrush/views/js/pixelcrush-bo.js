@@ -21,6 +21,20 @@
  *
  */
 
+var postAjaxProcess = function(url) {
+    var URL = url.split('?');
+    $.post(
+        URL[0],
+        JSON.parse('{"' + decodeURI(URL[1]).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g,'":"') + '"}')
+    );
+};
+
+var reloadPage = function() {
+    setTimeout(function() {
+        location.reload();
+    }, 333);
+};
+
 $(document).ready(function() {
     if ($('#pixelcrush-logo-hd').length == 0) {
         var img = '<div class="margin-form">' +
@@ -28,4 +42,25 @@ $(document).ready(function() {
             '</div><div class="clear"></div>';
         $('FORM#configuration_form FIELDSET LEGEND').after(img);
     }
+
+    $('.ajax_action').click(function(e) {
+        e.preventDefault();
+        postAjaxProcess($(this).attr('href'));
+        reloadPage();
+    });
+
+    $('.prestashop-switch').has('#PIXELCRUSH_ENABLE_IMAGES_on').click(function(e) {
+        if ($('input[name=PIXELCRUSH_ENABLE_IMAGES]:checked').val() && $('#PIXELCRUSH_SAFE_UNINSTALL').val() === '0') {
+            e.preventDefault();
+            var msg = [
+                'You have missing thumbnails on disk.',
+                'Image CDN can\'t be disabled until all thumbnails are regenerated on disk.',
+                'Click OK to regenerate all thumbnails (process will take some time).'
+            ];
+            if (confirm(msg.join('\n'))) {
+                postAjaxProcess($('#PIXELCRUSH_PROCESS_URL').val()+'&process=regenerate');
+                reloadPage();
+            }
+        };
+    });
 });

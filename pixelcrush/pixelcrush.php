@@ -57,6 +57,12 @@ class Pixelcrush extends Module
         $this->description    = $this->l('Make your shop extremely faster and forget managing images.');
         $this->client         = $this->getClient();
         $this->cache          = new \pixelcrush\PSCache();
+        $confirmUninstall = array(
+            $this->l('Your images are being delivered by our Image CDN.'),
+            $this->l('You should to disable it on the configuration page before proceed uninstalling.'),
+            $this->l('You could potentially break your shop images. Confirm uninstall?')
+        );
+        $this->confirmUninstall = Configuration::get('PIXELCRUSH_ENABLE_IMAGES') ?: implode('\n', $confirmUninstall);
 
         $this->ps_versions_compliancy = array('min' => '1.7', 'max' => '1.7.9.9');
 
@@ -102,18 +108,30 @@ class Pixelcrush extends Module
         }
     }
 
+    public function disable($force_all = false)
+    {
+        return $this->safeUninstall() && parent::disable();
+    }
+
     public function uninstall()
     {
-        return parent::uninstall() &&
-               Configuration::deleteByName('PIXELCRUSH_ENABLE_IMAGES') &&
-               Configuration::deleteByName('PIXELCRUSH_ENABLE_STATICS') &&
-               Configuration::deleteByName('PIXELCRUSH_USER_ACCOUNT') &&
-               Configuration::deleteByName('PIXELCRUSH_API_SECRET') &&
-               Configuration::deleteByName('PIXELCRUSH_FILTERS_PREFIX') &&
-               Configuration::deleteByName('PIXELCRUSH_FILL_BACKGROUND') &&
-               Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL') &&
-               Configuration::deleteByName('PIXELCRUSH_URL_DOMAIN') &&
-               Configuration::deleteByName('PIXELCRUSH_URL_FOLDER');
+        return $this->safeUninstall() &&
+            parent::uninstall() &&
+            Configuration::deleteByName('PIXELCRUSH_ENABLE_IMAGES') &&
+            Configuration::deleteByName('PIXELCRUSH_ENABLE_STATICS') &&
+            Configuration::deleteByName('PIXELCRUSH_USER_ACCOUNT') &&
+            Configuration::deleteByName('PIXELCRUSH_API_SECRET') &&
+            Configuration::deleteByName('PIXELCRUSH_FILTERS_PREFIX') &&
+            Configuration::deleteByName('PIXELCRUSH_FILL_BACKGROUND') &&
+            Configuration::deleteByName('PIXELCRUSH_URL_PROTOCOL') &&
+            Configuration::deleteByName('PIXELCRUSH_URL_DOMAIN') &&
+            Configuration::deleteByName('PIXELCRUSH_URL_FOLDER');
+    }
+
+    public function safeUninstall()
+    {
+        return !Configuration::get('PIXELCRUSH_ENABLE_IMAGES') ||
+            (Configuration::get('PIXELCRUSH_ENABLE_IMAGES') && $this->thumbsOnDisk(true));
     }
 
     public function getContent()
@@ -132,10 +150,7 @@ class Pixelcrush extends Module
                 'fill_background' => Tools::getValue('PIXELCRUSH_FILL_BACKGROUND'),
                 'url_protocol'    => Tools::getValue('PIXELCRUSH_URL_PROTOCOL'),
                 'domain'          => Tools::getValue('PIXELCRUSH_DOMAIN'),
-                'folder'          => (object)array(
-                    'name' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[0],
-                    'url' => explode('|', Tools::getValue('PIXELCRUSH_FOLDER'))[1]
-                ),
+                'folder'          => Tools::jsonDecode(Configuration::get('PIXELCRUSH_FOLDER')),
                 'no_thumbnails'   => Tools::getValue('PIXELCRUSH_NO_THUMBNAILS', 0),
             );
 
@@ -170,15 +185,6 @@ class Pixelcrush extends Module
             }
         }
 
-        if (Tools::getValue('action') && !Configuration::get('PIXELCRUSH_ACTIVE_PROCESS')) {
-            if ($this->post_async($this->ajaxProcessLink(Tools::getValue('action')))) {
-                $output .= $this->adminDisplayInformation($this->l(
-                    'Thumbnails sent to '.Tools::getValue('action').' in the background.
-                    Please check result in a few minutes.'
-                ));
-            }
-        }
-
         return $output.$this->displayForm();
     }
 
@@ -196,66 +202,40 @@ class Pixelcrush extends Module
 
         return (object)array(
             'size' => (float)bcdiv($bytes, 1048576, 2),
-            'nb' => $nb
+            'nb' => $nb,
         );
     }
 
-    public function thumbnailsOnDisk($type = 'products') {
-        $thumbsOnDisk = 0;
-        $imageTypes = ImageType::getImagesTypes($type);
-        $nbImages = (int)Db::getInstance()->getValue('SELECT COUNT(id_image) FROM '._DB_PREFIX_.'image');
+    public function thumbsOnDisk($strict = false) {
+        if ($strict) {
+            $thumbsOnDisk = 0;
+            $imageTypes = ImageType::getImagesTypes('products');
+            $nbImages = (int)Db::getInstance()->getValue('SELECT COUNT(id_image) FROM '._DB_PREFIX_.'image');
+        }
 
         $fileIterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__FILE__).'/../../img/p/'));
         foreach ($fileIterator as $file) {
             if (preg_match('/^[0-9]+\-[_a-zA-Z0-9-]*\.(jpg|png|jpeg)$/', $file->getFileName())) {
+                if (!$strict) {
+                    return true;
+                }
                 $thumbsOnDisk++;
             }
         }
 
-        return $thumbsOnDisk === $nbImages*count($imageTypes);
-    }
-
-    public function post_async($url)
-    {
-        $URL = parse_url($url);
-
-        // Make the actual call
-        $port = isset($URL['port']) ? $URL['port'] : ($URL['scheme'] === 'http' ? 80 : 443);
-        $fp = fsockopen($URL['host'], $port, $errno, $errstr, 30);
-        if ($fp) {
-            $headers = array(
-                'POST '.$URL['path'].' HTTP/1.1',
-                'Host: '.$URL['host'],
-                'Content-Type: application/x-www-form-urlencoded',
-                'Content-Length: '.strlen($URL['query']),
-                'Connection: Close',
-            );
-
-            if (fwrite($fp, implode("\r\n", $headers)."\r\n\r\n".$URL['query'])) {
-                return fclose($fp);
-            }
-        } else {
-            error_log("fsockopen error: $errstr ($errno)");
-        }
-
-
-        return false;
+        return $strict ? $thumbsOnDisk === $nbImages*count($imageTypes) : false;
     }
 
     public function ajaxProcessLink($action = null)
     {
-        $ajax_url = null;
+        $ajax_params = array(
+            'token' => Tools::encrypt('pixelcrush-imagemanager'.$this->context->employee->id),
+            'type' => 'all',
+            'id_employee' => $this->context->employee->id,
+            'process' => $action,
+        );
 
-        if ($action) {
-            $ajax_params = array(
-                'token' => Tools::encrypt('pixelcrush-imagemanager'.$this->context->employee->id),
-                'type' => 'all',
-                'action' => $action,
-                'id_employee' => $this->context->employee->id,
-            );
-
-            $ajax_url = $this->context->link->getModuleLink('pixelcrush', 'ImageManager', $ajax_params, true);
-        }
+        $ajax_url = $this->context->link->getModuleLink('pixelcrush', 'PxcImageManager', $ajax_params, true);
 
         return $ajax_url;
     }
@@ -270,7 +250,12 @@ class Pixelcrush extends Module
         Configuration::updateValue('PIXELCRUSH_FILL_BACKGROUND', $config->fill_background);
         Configuration::updateValue('PIXELCRUSH_URL_PROTOCOL', $config->url_protocol);
         Configuration::updateValue('PIXELCRUSH_DOMAIN', $config->domain);
-        Configuration::updateValue('PIXELCRUSH_FOLDER', $config->folder->name.'|'.$config->folder->url);
+        Configuration::updateValue('PIXELCRUSH_FOLDER',
+            Tools::jsonEncode(array(
+                'name' => $config->folder->name,
+                'url' => $config->folder->url
+            ))
+        );
         Configuration::updateValue('PIXELCRUSH_NO_THUMBNAILS', $config->no_thumbnails);
     }
 
@@ -327,20 +312,18 @@ class Pixelcrush extends Module
             ));
         }
 
-        $backlink = $this->context->link->getAdminLink('AdminModules').
-            '&configure=pixelcrush&token='.Tools::getAdminTokenLite('AdminModules');
-
+        $thumbnail_info = '';
         if (Configuration::get('PIXELCRUSH_ACTIVE_PROCESS')) {
-            $thumbnail_info = "<strong>".Configuration::get('PIXELCRUSH_ACTIVE_PROCESS')." is still running in the background.</strong><br/>
-                               Please wait until it is finished to perform any other thumbnail-related action.";
+            $thumbnail_info = '<strong>'.Configuration::get('PIXELCRUSH_ACTIVE_PROCESS').' process is running in the background.</strong><br/>
+                               Please wait until it is finished to perform any other thumbnail-related action.';
         } elseif (($thumbs = $this->getProductsThumbsSize()) && $thumbs->size) {
-            $thumbnail_info = $thumbs->nb." Thumbnail files on the server. It is safe to delete them.
-                              (You will save ".$thumbs->size."Mb on disk)<br/>
-                              <a href='".$backlink."&action=remove'>Delete Thumbnails</a>";
-        } elseif (!$thumbs) {
-            $thumbnail_info = "Thumbnail files are deleted on the server.<br/>
-                                You should only regenerate them if you are going to turn Image CDN off or disable or uninstall the module.<br/>
-                               <a href='".$backlink."&action=regenerate'>Regenerate Thumbnails</a>";
+            $thumbnail_info = $thumbs->nb.' Thumbnail files on the server ('.$thumbs->size.'Mb on disk). It is safe to delete them.<br/>
+                              <a class="ajax_action" href="'.$this->ajaxProcessLink('remove').'">
+                              Delete Thumbnails</a>';
+        } elseif (!$this->thumbsOnDisk()) {
+            $thumbnail_info = 'Thumbnail files are <strong>deleted</strong> on the server.<br/>
+                                You should only regenerate them if you are going to turn Image CDN off or before disable/uninstall the module.<br/>
+                               <a class="ajax_action" href="'.$this->ajaxProcessLink('regenerate').'">Regenerate Thumbnails</a>';
         }
 
         // Init Fields form array
@@ -392,7 +375,7 @@ class Pixelcrush extends Module
                     'type'    => 'html',
                     'label'   => $this->l('Thumbnail Status'),
                     'name'    => 'PIXELCRUSH_THUMBNAILS_STATUS',
-                    'html_content' => "<div class='alert alert-info col-lg-6'>$thumbnail_info</div>",
+                    'html_content' => "<div class='alert alert-info col-lg-9'>$thumbnail_info</div>",
                 ),
                 array(
                     'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
@@ -518,6 +501,14 @@ class Pixelcrush extends Module
                     'desc'     => $this->l('Use color picker for color.'),
                     'required' => false
                 ),
+                array(
+                    'type'     => 'hidden',
+                    'name'     => 'PIXELCRUSH_SAFE_UNINSTALL',
+                ),
+                array(
+                    'type'     => 'hidden',
+                    'name'     => 'PIXELCRUSH_PROCESS_URL',
+                ),
             ),
             'submit' => array(
                 'title' => $this->l('Save'),
@@ -571,6 +562,7 @@ class Pixelcrush extends Module
         );
 
         // Load current values
+        $folder = Tools::jsonDecode(Configuration::get('PIXELCRUSH_FOLDER'));
         $helper->fields_value['PIXELCRUSH_ENABLE_IMAGES']    = Configuration::get('PIXELCRUSH_ENABLE_IMAGES');
         $helper->fields_value['PIXELCRUSH_ENABLE_STATICS']   = Configuration::get('PIXELCRUSH_ENABLE_STATICS');
         $helper->fields_value['PIXELCRUSH_USER_ACCOUNT']     = Configuration::get('PIXELCRUSH_USER_ACCOUNT');
@@ -579,8 +571,11 @@ class Pixelcrush extends Module
         $helper->fields_value['PIXELCRUSH_FILL_BACKGROUND']  = Configuration::get('PIXELCRUSH_FILL_BACKGROUND');
         $helper->fields_value['PIXELCRUSH_URL_PROTOCOL']     = Configuration::get('PIXELCRUSH_URL_PROTOCOL');
         $helper->fields_value['PIXELCRUSH_DOMAIN']           = Configuration::get('PIXELCRUSH_DOMAIN');
-        $helper->fields_value['PIXELCRUSH_FOLDER']           = Configuration::get('PIXELCRUSH_FOLDER');
+        $helper->fields_value['PIXELCRUSH_FOLDER']           = $folder ? $folder->name.'|'.$folder->url : '';
         $helper->fields_value['PIXELCRUSH_NO_THUMBNAILS']    = Configuration::get('PIXELCRUSH_NO_THUMBNAILS');
+
+        $helper->fields_value['PIXELCRUSH_SAFE_UNINSTALL']   = (int)$this->safeUninstall();
+        $helper->fields_value['PIXELCRUSH_PROCESS_URL']      = $this->ajaxProcessLink();
 
         return $helper->generateForm($fields_form);
     }
@@ -781,10 +776,7 @@ class Pixelcrush extends Module
             'filters_prefix'  => Configuration::get('PIXELCRUSH_FILTERS_PREFIX'),
             'url_protocol'    => Configuration::get('PIXELCRUSH_URL_PROTOCOL'),
             'domain'          => Configuration::get('PIXELCRUSH_DOMAIN'),
-            'folder'          => (object)array(
-                                    'name' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[0],
-                                    'url' => explode('|', Configuration::get('PIXELCRUSH_FOLDER'))[1],
-            ),
+            'folder'          => Tools::jsonDecode(Configuration::get('PIXELCRUSH_FOLDER')),
             'no_thumbnails'   => Configuration::get('PIXELCRUSH_NO_THUMBNAILS', 0),
         );
 
@@ -797,9 +789,7 @@ class Pixelcrush extends Module
         if ($this->context->controller->controller_name === 'AdminModules' &&
             Tools::getIsset('configure') && Tools::getValue('configure') === 'pixelcrush'
         ) {
-            if (version_compare(_PS_VERSION_, '1.6.0', '<')) {
-                $this->context->controller->addJS($this->_path . 'views/js/pixelcrush-bo.js');
-            }
+            $this->context->controller->addJS($this->_path . 'views/js/pixelcrush-bo.js');
             $this->context->controller->addCSS($this->_path . 'views/css/pixelcrush-bo.css');
         }
     }
