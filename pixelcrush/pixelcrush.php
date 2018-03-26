@@ -291,25 +291,31 @@ class Pixelcrush extends Module
     public function displayForm()
     {
         $fields_form = array();
-        $domains = array_map(function($domain) {
-            $domain = ($domain->ssl === 'enabled' ? 'https://' : 'http://') . $domain->name;
-            return array(
-                'id_option' => $domain,
-                'name' => $domain,
-            );
-        }, $this->getUserCloud()->cdn->domains);
+        $user_cloud = $this->getUserCloud();
+        $domains = $folders = array(
+            'id_option' => '',
+            'name' => 'None'
+        );
+        $folders = array(
+            'id_option' => '',
+            'name' => 'None'
+        );
 
-        $folders = array_map(function($folder) {
-            return array(
-                'id_option' => $folder->name.'|'.$folder->url,
-                'name' => $folder->name.' --> '.$folder->url
+        if ($user_cloud && isset($user_cloud->cdn)) {
+            foreach ($user_cloud->cdn->domains as $domain) {
+                $domain = ($domain->ssl === 'enabled' ? 'https://' : 'http://') . $domain->name;
+                $domains[] = array(
+                    'id_option' => $domain,
+                    'name' => $domain,
+                );
+            }
+        }
+
+        foreach ($user_cloud->cdn->folders as $folder) {
+            $folders[] = array(
+                'id_option' => $folder->name . '|' . $folder->url,
+                'name' => $folder->name . ' --> ' . $folder->url
             );
-        }, $this->getUserCloud()->cdn->folders);
-        if (count($folders)) {
-            array_unshift($folders, array(
-                'id_option' => '',
-                'name' => 'None'
-            ));
         }
 
         $thumbnail_info = '';
