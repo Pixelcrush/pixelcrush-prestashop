@@ -167,7 +167,7 @@ class Pixelcrush extends Module
                 // Submit/Reset Existing Filters
                 if (!$this->resetCdnFilters((bool)Tools::getValue('reset_filters_checked'))) {
                     $error   = true;
-                    $output .= $this->displayError($this->_errors);
+                    $output .= $this->displayError(implode('\n', $this->_errors));
                 } elseif (!$this->client->domainExists($this->client->domain())) {
                     $error   = true;
                     $output .= $this->displayError('The user-id domain cannot be found, please check the value');
