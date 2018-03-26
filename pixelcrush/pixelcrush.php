@@ -144,8 +144,8 @@ class Pixelcrush extends Module
             $submit = (object)array(
                 'enable_images'   => Tools::getValue('PIXELCRUSH_ENABLE_IMAGES'),
                 'enable_statics'  => Tools::getValue('PIXELCRUSH_ENABLE_STATICS'),
-                'user_account'    => Tools::getValue('PIXELCRUSH_USER_ACCOUNT'),
-                'api_secret'      => Tools::getValue('PIXELCRUSH_API_SECRET'),
+                'user_account'    => trim(Tools::getValue('PIXELCRUSH_USER_ACCOUNT')),
+                'api_secret'      => trim(Tools::getValue('PIXELCRUSH_API_SECRET')),
                 'filters_prefix'  => Tools::getValue('PIXELCRUSH_FILTERS_PREFIX'),
                 'fill_background' => Tools::getValue('PIXELCRUSH_FILL_BACKGROUND'),
                 'url_protocol'    => Tools::getValue('PIXELCRUSH_URL_PROTOCOL'),
