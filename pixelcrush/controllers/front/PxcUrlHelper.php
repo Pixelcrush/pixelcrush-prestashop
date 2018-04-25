@@ -26,12 +26,14 @@ class PixelcrushPxcUrlHelperModuleFrontController extends ModuleFrontController
 {
     public function initContent()
     {
-        // TODO: WORK IN PROGRESS - Split functionality where possible
-        $lang = Configuration::get('PS_LANG_DEFAULT');
-        $type = Tools::getValue('type');
-        $cover = Tools::getValue('cover');
-        $id_object = Tools::getValue('id_object');
+        $lang       = Configuration::get('PS_LANG_DEFAULT');
+        $type       = Tools::getValue('type');
+        $cover      = Tools::getValue('cover');
+        $id_object  = Tools::getValue('id_object');
         $image_type = Tools::getValue('image_type');
+        $id_image   = Tools::getValue('id_image');
+        $width      = Tools::getValue('width');
+        $images     = [];
 
         if (!$type || !$id_object) {
             return;
@@ -39,16 +41,7 @@ class PixelcrushPxcUrlHelperModuleFrontController extends ModuleFrontController
 
         parent::initContent();
 
-        $images_types = ImageType::getImagesTypes($type, true);
-
         if ($type === 'product') {
-            if ($cover) {
-                $cover = Product::getCover($id_object)['id_image'];
-            } else {
-                $product = new Product($id_object);
-                $images = $product->getImages($lang, $this->context);
-            }
-
             $langs_rewrites = Product::getUrlRewriteInformations($id_object);
             foreach ($langs_rewrites as $rewrite) {
                 if ($rewrite['id_lang'] === $lang) {
@@ -56,15 +49,42 @@ class PixelcrushPxcUrlHelperModuleFrontController extends ModuleFrontController
                 }
             }
 
-            foreach ($images as $image_id) {
-                // if only absolute image url
-                $images[] = Image::getImgFolderStatic($image_id);
-
-                // if image url with image_type
-                foreach ($images_types as $type) {
-                    $images[] = $this->context->link->getImageLink($product_rewrite, $image_id, $type);
+            if ($id_image) {
+                if ($image_type) {
+                    $images[] = $this->context->link->getImageLink($product_rewrite, $id_image, $image_type);
+                } elseif ($width) {
+                    $images[] = $this->getAbsoluteImagePath($id_image);
                 }
+            } else {
+                $product = new Product($id_object);
+                $product_images = $product->getImages($lang, $this->context);
+                $images = [];
+
+                if ($cover) {
+                    foreach ($product_images as $key => $image) {
+                        if (!$image['cover']) {
+                            unset($product_images[$key]);
+                        }
+                    }
+                }
+
+                foreach ($product_images as $image) {
+                    if ($image_type) {
+                        $images[] = $this->context->link->getImageLink($product_rewrite, $image['id_image'], $image_type);
+                    } else {
+                        $images[] = $this->getAbsoluteImagePath($image['id_image']);
+                    }
+                }
+
             }
+
+            die(json_encode(count($images) > 1 ? $images : $images[0], JSON_UNESCAPED_SLASHES));
         }
+    }
+
+    private function getAbsoluteImagePath($id_image)
+    {
+        return 'http' . (isset($_SERVER['HTTPS']) ? 's' : '').'://'.Tools::getShopDomain()
+            .'/img/p/'.Image::getImgFolderStatic($id_image).$id_image.'.jpg';
     }
 }
