@@ -95,7 +95,7 @@ EOF
     fi
 
     # else get host ip
-    if [ -z "${HOST}" ]; then
+    if [ -z "${HOST}" ] || [ "${HOST}" = "::1" ]; then
         HOST=`/sbin/ip route | awk '/default/ { print $3 }'`
     fi
 
