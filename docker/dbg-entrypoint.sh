@@ -146,11 +146,11 @@ fi
 umask 0002
 
 # Use tmpfs as cache
-rm -R /var/www/host/root/cache
+rm -Rf /var/www/host/root/cache
 ln -s /tmp/cache /var/www/host/root
 
 if [[ "$PS_VERSION" =~ ^1.7.* ]]; then
-    rm -R /var/www/host/root/app/cache
+    rm -Rf /var/www/host/root/app/cache
     ln -s /tmp/cache-1.7 /var/www/host/root/app/cache
 fi
 

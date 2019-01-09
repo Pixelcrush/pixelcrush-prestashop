@@ -3,7 +3,7 @@ LABEL maintainer "Miguel Rasero <miguel@pixelcrush.io>"
 
 
 RUN apt-get -y update \
- && apt-get install -y rsync libmemcached-dev \
+ && apt-get install -y rsync libmemcached-dev iproute \
  && pecl install xdebug-2.5.5 \
  && pecl install memcached-2.2.0 \
  && pecl install apcu-4.0.11 \

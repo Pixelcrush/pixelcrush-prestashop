@@ -72,7 +72,7 @@ elif [ "${PS_VERSION}" = "1.6" ]; then
   PS_DOCKER_VERSION="1.6.1.17"
 elif [ "${PS_VERSION}" = "1.7" ]; then
   MYSQL_VERSION="5.7"
-  PS_DOCKER_VERSION="1.7.2.4"
+  PS_DOCKER_VERSION="1.7.5.0"
 else
   echo "Unsupported PrestaShop version: ${PS_VERSION}"
   exit 1

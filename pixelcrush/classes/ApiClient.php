@@ -61,7 +61,7 @@ class ApiClient
         $parsed_url = parse_url($endpoint);
         $host       = $parsed_url['host'];
 
-        return !(checkdnsrr($host, 'CNAME') === false);
+        return (checkdnsrr($host, 'A') || checkdnsrr($host, 'CNAME'));
     }
 
     /**
