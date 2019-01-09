@@ -26,8 +26,8 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once __DIR__ . '/classes/PSCache.php';
-require_once __DIR__ . '/classes/ApiClient.php';
+require_once(dirname(__FILE__) . '/classes/PSCache.php');
+require_once(dirname(__FILE__) . '/classes/ApiClient.php');
 
 class Pixelcrush extends Module
 {
@@ -98,7 +98,7 @@ class Pixelcrush extends Module
 
         umask(0000);
         if (!file_exists($full_path.'/index.php') && is_writable($full_path)) {
-            copy(__DIR__ .'/index.php', $full_path.'/index.php');
+            copy(dirname(__FILE__).'/index.php', $full_path.'/index.php');
         }
     }
 
@@ -233,7 +233,7 @@ class Pixelcrush extends Module
                     'lang' => false,
                 ),
                 array(
-                    'type'     => version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch',
+                    'type'     => (version_compare(_PS_VERSION_, '1.6.0', '<') ? 'radio' : 'switch'),
                     'label'    => $this->l('Enable Static CDN (.js / .css / fonts files)'),
                     'name'     => 'PIXELCRUSH_ENABLE_STATICS',
                     'required' => true,
